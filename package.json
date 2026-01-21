@@ -1,0 +1,29 @@
+{
+  "name": "saferoute-ai",
+  "version": "1.0.0",
+  "description": "AI-Powered API Gateway with Intelligent Fraud Detection",
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "start:gateway": "node backend/gateway/server.js",
+    "start:payment": "node backend/services/payment-service.js",
+    "start:account": "node backend/services/account-service.js",
+    "start:verification": "node backend/services/verification-service.js",
+    "start:all": "concurrently \"npm run start:payment\" \"npm run start:account\" \"npm run start:verification\" \"npm run start:gateway\"",
+    "dev": "concurrently \"nodemon backend/gateway/server.js\" \"nodemon backend/services/payment-service.js\" \"nodemon backend/services/account-service.js\" \"nodemon backend/services/verification-service.js\"",
+    "postinstall": "echo '\n✅ Installation complete! Run: npm start\n'"
+  },
+  "keywords": ["api-gateway", "fraud-detection", "ai", "fintech"],
+  "author": "SafeRoute AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeRoute AI - Intelligent API Gateway</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div id="welcomeModal" class="modal">
+        <div class="modal-content welcome-modal">
+            <div class="welcome-header">
+                <div class="welcome-icon">🛡️</div>
+                <h1>Welcome to SafeRoute AI</h1>
+                <p class="welcome-subtitle">Your Intelligent API Gateway for Fraud Detection</p>
+            </div>
+            <div class="welcome-body">
+                <div class="welcome-section">
+                    <h3>🎯 What is SafeRoute AI?</h3>
+                    <p>SafeRoute AI is an intelligent API gateway that protects your fintech platform by detecting fraud patterns in real-time using advanced AI algorithms.</p>
+                </div>
+                <div class="welcome-section">
+                    <h3>✨ Key Features</h3>
+                    <ul class="feature-list">
+                        <li><strong>Real-time Fraud Detection:</strong> AI analyzes every request instantly</li>
+                        <li><strong>Intelligent Routing:</strong> Automatically blocks or allows traffic based on risk</li>
+                        <li><strong>Complete Visibility:</strong> Monitor all API traffic and decisions</li>
+                        <li><strong>Interactive Testing:</strong> Try different scenarios with one click</li>
+                    </ul>
+                </div>
+                <div class="welcome-section">
+                    <h3>🚀 Quick Start Guide</h3>
+                    <ol class="quick-start-list">
+                        <li>Explore the <strong>Dashboard</strong> to see real-time metrics</li>
+                        <li>Use the <strong>Test Panel</strong> on the right to send API requests</li>
+                        <li>Try <strong>Demo Scenarios</strong> to see fraud detection in action</li>
+                        <li>Check the <strong>Live Stream</strong> to watch requests flow through</li>
+                    </ol>
+                </div>
+                <div class="welcome-tips">
+                    <p>💡 <strong>Tip:</strong> Hover over any button or feature to see helpful tooltips!</p>
+                </div>
+            </div>
+            <div class="welcome-footer">
+                <button id="startTourBtn" class="btn btn-secondary">Take a Tour</button>
+                <button id="closeWelcomeBtn" class="btn btn-primary">Get Started</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpPanel" class="help-panel">
+        <button id="helpToggle" class="help-toggle" title="Need help? Click for assistance">
+            <span class="help-icon">?</span>
+        </button>
+        <div id="helpContent" class="help-content">
+            <div class="help-header">
+                <h3>Context Help</h3>
+                <button id="closeHelp" class="close-help">×</button>
+            </div>
+            <div id="helpText" class="help-text">
+                <p><strong>Welcome!</strong> This panel provides context-sensitive help based on what you're viewing.</p>
+                <p>Hover over buttons and features to see tooltips, or click elements to get detailed guidance.</p>
+            </div>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="logo-icon">🛡️</span>
+                    <span class="logo-text">SafeRoute AI</span>
+                </div>
+                <div class="header-subtitle">Intelligent API Gateway</div>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="systemStatus">Initializing...</span>
+                </div>
+                <div class="header-info">
+                    <span id="uptime">Uptime: 0s</span>
+                </div>
+                <button id="refreshBtn" class="btn btn-icon" title="Refresh dashboard data manually">
+                    <span class="icon">🔄</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Quick Actions</h3>
+                <div class="quick-actions">
+                    <button id="clearLogsBtn" class="btn btn-secondary btn-block" title="Clear all request logs (cannot be undone)">
+                        <span class="icon">🗑️</span> Clear Logs
+                    </button>
+                    <button id="resetMetricsBtn" class="btn btn-secondary btn-block" title="Reset all metrics to zero and start fresh">
+                        <span class="icon">↺</span> Reset Metrics
+                    </button>
+                    <button id="exportDataBtn" class="btn btn-secondary btn-block" title="Export current metrics and logs as JSON file">
+                        <span class="icon">📥</span> Export Data
+                    </button>
+                    <button id="healthCheckBtn" class="btn btn-secondary btn-block" title="Check health status of all backend services">
+                        <span class="icon">❤️</span> Health Check
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Test API Gateway</h3>
+                <div class="test-panel">
+                    <label class="form-label">Select Endpoint:</label>
+                    <select id="endpointSelect" class="form-select" title="Choose which API endpoint to test">
+                        <option value="/api/payments">POST /api/payments</option>
+                        <option value="/api/accounts/:accountId">GET /api/accounts/:accountId</option>
+                        <option value="/api/payments/:transactionId">GET /api/payments/:transactionId</option>
+                        <option value="/api/verify/identity">POST /api/verify/identity</option>
+                    </select>
+
+                    <label class="form-label">Request Body (JSON):</label>
+                    <textarea id="requestBody" class="form-textarea" rows="8" title="Edit the JSON payload for your test request"></textarea>
+
+                    <button id="sendRequestBtn" class="btn btn-primary btn-block" title="Send this request through the API Gateway">
+                        <span class="icon">🚀</span> Send Request
+                    </button>
+
+                    <div id="responseDisplay" class="response-display"></div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Demo Scenarios</h3>
+                <p class="sidebar-description">Try these pre-built scenarios to see fraud detection in action!</p>
+                <div class="scenario-buttons">
+                    <button class="btn btn-scenario" data-scenario="normal" title="Send a normal, legitimate payment request (Risk: Low)">
+                        <span class="scenario-icon">🟢</span>
+                        <span class="scenario-text">
+                            <strong>Normal Transaction</strong>
+                            <small>Typical payment, low risk</small>
+                        </span>
+                    </button>
+                    <button class="btn btn-scenario" data-scenario="rapid-fire" title="Simulate 30 rapid requests to trigger rate limiting (Risk: High)">
+                        <span class="scenario-icon">🔴</span>
+                        <span class="scenario-text">
+                            <strong>Rapid Fire Attack</strong>
+                            <small>30 requests in 60 seconds</small>
+                        </span>
+                    </button>
+                    <button class="btn btn-scenario" data-scenario="high-value" title="Send a payment 10x above average amount (Risk: Medium-High)">
+                        <span class="scenario-icon">🟡</span>
+                        <span class="scenario-text">
+                            <strong>High-Value Anomaly</strong>
+                            <small>Payment 10x above average</small>
+                        </span>
+                    </button>
+                    <button class="btn btn-scenario" data-scenario="off-hours" title="Simulate a large transaction during off-hours (Risk: Medium)">
+                        <span class="scenario-icon">🟡</span>
+                        <span class="scenario-text">
+                            <strong>Off-Hours Activity</strong>
+                            <small>Large payment at 2 AM</small>
+                        </span>
+                    </button>
+                    <button class="btn btn-scenario" data-scenario="combined" title="Trigger multiple fraud indicators simultaneously (Risk: Critical)">
+                        <span class="scenario-icon">🔴</span>
+                        <span class="scenario-text">
+                            <strong>Combined Threat</strong>
+                            <small>Multiple fraud indicators</small>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Settings</h3>
+                <div class="settings-panel">
+                    <label class="setting-item">
+                        <input type="checkbox" id="autoRefreshToggle" checked>
+                        <span title="Automatically refresh dashboard every 2 seconds">Auto-refresh (2s)</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="soundAlertsToggle">
+                        <span title="Play sound when high-risk requests are detected">Sound Alerts</span>
+                    </label>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <section class="metrics-section">
+                <h2 class="section-title">Traffic Summary</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card" title="Total number of requests processed by the gateway">
+                        <div class="metric-icon">📊</div>
+                        <div class="metric-content">
+                            <div class="metric-label">Total Requests</div>
+                            <div class="metric-value" id="totalRequests">0</div>
+                            <div class="metric-change" id="totalChange">—</div>
+                        </div>
+                    </div>
+                    <div class="metric-card" title="Requests that completed successfully (2xx status)">
+                        <div class="metric-icon success">✓</div>
+                        <div class="metric-content">
+                            <div class="metric-label">Success</div>
+                            <div class="metric-value" id="successRequests">0</div>
+                            <div class="metric-change success" id="successRate">0%</div>
+                        </div>
+                    </div>
+                    <div class="metric-card" title="Requests blocked by AI fraud detection">
+                        <div class="metric-icon danger">⊗</div>
+                        <div class="metric-content">
+                            <div class="metric-label">Blocked</div>
+                            <div class="metric-value" id="blockedRequests">0</div>
+                            <div class="metric-change danger" id="blockedRate">0%</div>
+                        </div>
+                    </div>
+                    <div class="metric-card" title="Average time to process and route requests">
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-content">
+                            <div class="metric-label">Avg Response</div>
+                            <div class="metric-value" id="avgResponse">0ms</div>
+                            <div class="metric-change" id="responseChange">—</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="risk-section">
+                <h2 class="section-title">Risk Distribution</h2>
+                <div class="risk-grid">
+                    <div class="risk-card normal" title="Requests with risk score 0-30 (safe to process)">
+                        <div class="risk-header">
+                            <span class="risk-icon">🟢</span>
+                            <span class="risk-label">Normal</span>
+                        </div>
+                        <div class="risk-value" id="normalCount">0</div>
+                        <div class="risk-percentage" id="normalPercent">0%</div>
+                        <div class="risk-bar">
+                            <div class="risk-bar-fill normal" id="normalBar"></div>
+                        </div>
+                    </div>
+                    <div class="risk-card suspicious" title="Requests with risk score 31-69 (monitor closely)">
+                        <div class="risk-header">
+                            <span class="risk-icon">🟡</span>
+                            <span class="risk-label">Suspicious</span>
+                        </div>
+                        <div class="risk-value" id="suspiciousCount">0</div>
+                        <div class="risk-percentage" id="suspiciousPercent">0%</div>
+                        <div class="risk-bar">
+                            <div class="risk-bar-fill suspicious" id="suspiciousBar"></div>
+                        </div>
+                    </div>
+                    <div class="risk-card high-risk" title="Requests with risk score 70-100 (blocked or flagged)">
+                        <div class="risk-header">
+                            <span class="risk-icon">🔴</span>
+                            <span class="risk-label">High Risk</span>
+                        </div>
+                        <div class="risk-value" id="highRiskCount">0</div>
+                        <div class="risk-percentage" id="highRiskPercent">0%</div>
+                        <div class="risk-bar">
+                            <div class="risk-bar-fill high-risk" id="highRiskBar"></div>
+                        </div>
+                    </div>
+                    <div class="risk-card average" title="Average risk score across all requests">
+                        <div class="risk-header">
+                            <span class="risk-icon">📈</span>
+                            <span class="risk-label">Avg Risk Score</span>
+                        </div>
+                        <div class="risk-value" id="avgRiskScore">0</div>
+                        <div class="risk-level" id="avgRiskLevel">Low Risk</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="charts-section">
+                <h2 class="section-title">Fraud Detection Patterns</h2>
+                <div class="chart-container" title="Shows which fraud detection rules have been triggered">
+                    <canvas id="fraudPatternsChart"></canvas>
+                </div>
+            </section>
+
+            <section class="logs-section">
+                <div class="logs-header">
+                    <h2 class="section-title">Live Request Stream</h2>
+                    <div class="logs-controls">
+                        <button class="btn btn-small" id="pauseLogsBtn" title="Pause the live stream to examine requests">
+                            <span class="icon">⏸️</span> Pause
+                        </button>
+                        <select id="logFilterSelect" class="form-select-small" title="Filter requests by risk level">
+                            <option value="all">All Requests</option>
+                            <option value="NORMAL">Normal Only</option>
+                            <option value="SUSPICIOUS">Suspicious Only</option>
+                            <option value="HIGH_RISK">High Risk Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="logsContainer" class="logs-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <h3>No Requests Yet</h3>
+                        <p>Send a test request or try a demo scenario to see the live stream in action!</p>
+                        <button class="btn btn-primary" onclick="document.getElementById('sendRequestBtn').click()">
+                            Send Your First Request
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="analysis-section">
+                <h2 class="section-title">AI Analysis & Insights</h2>
+                <div id="analysisContainer" class="analysis-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">🧠</div>
+                        <h3>Waiting for Activity</h3>
+                        <p>The AI will analyze patterns and provide insights once requests start flowing through the gateway.</p>
+                        <p class="empty-hint">💡 Try the "Rapid Fire Attack" scenario to see AI detection in action!</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <div id="detailModal" class="modal">
+        <div class="modal-content detail-modal">
+            <div class="modal-header">
+                <h2>Request Details</h2>
+                <button class="modal-close" id="closeDetailModal">×</button>
+            </div>
+            <div class="modal-body" id="detailModalBody"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
