@@ -7,11 +7,12 @@ const http = require('http');
 const FraudDetectionEngine = require('../ai/fraud-detection');
 
 const app = express();
-const PORT = 3000;
+const PORT = 4000;
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, '../../frontend')));
+const frontendBuildPath = path.join(__dirname, '../../frontend/build');
+app.use(express.static(frontendBuildPath));
 
 const fraudEngine = new FraudDetectionEngine();
 

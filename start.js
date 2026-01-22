@@ -5,7 +5,7 @@ const services = [
     { name: 'Payment Service', script: 'backend/services/payment-service.js', port: 3001 },
     { name: 'Account Service', script: 'backend/services/account-service.js', port: 3002 },
     { name: 'Verification Service', script: 'backend/services/verification-service.js', port: 3003 },
-    { name: 'API Gateway', script: 'backend/gateway/server.js', port: 3000 }
+    { name: 'API Gateway', script: 'backend/gateway/server.js', port: 4000 }
 ];
 
 const processes = [];
@@ -85,9 +85,10 @@ async function startAllServices() {
     console.log('\n╔════════════════════════════════════════════════════════════╗');
     console.log('║                  🎉 ALL SERVICES STARTED!                  ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
-    console.log('\n📊 Dashboard: http://localhost:3000');
-    console.log('📈 Metrics:   http://localhost:3000/metrics');
-    console.log('📋 Logs:      http://localhost:3000/logs');
+    console.log('\n📊 Frontend:  http://localhost:3000');
+    console.log('🔌 Gateway:   http://localhost:4000');
+    console.log('📈 Metrics:   http://localhost:4000/metrics');
+    console.log('📋 Logs:      http://localhost:4000/logs');
     console.log('\n💡 The dashboard will open automatically in your browser...\n');
 
     setTimeout(() => {
