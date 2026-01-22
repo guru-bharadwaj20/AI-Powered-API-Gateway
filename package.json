@@ -10,8 +10,10 @@
     "start:account": "node backend/services/account-service.js",
     "start:verification": "node backend/services/verification-service.js",
     "start:all": "concurrently \"npm run start:payment\" \"npm run start:account\" \"npm run start:verification\" \"npm run start:gateway\"",
-    "dev": "concurrently \"nodemon backend/gateway/server.js\" \"nodemon backend/services/payment-service.js\" \"nodemon backend/services/account-service.js\" \"nodemon backend/services/verification-service.js\"",
-    "postinstall": "echo '\n✅ Installation complete! Run: npm start\n'"
+    "start:frontend": "cd frontend && npm start",
+    "dev:backend": "concurrently -k \"nodemon backend/gateway/server.js\" \"nodemon backend/services/payment-service.js\" \"nodemon backend/services/account-service.js\" \"nodemon backend/services/verification-service.js\"",
+    "dev": "concurrently -k -n BACKEND,FRONTEND \"npm start\" \"npm run start:frontend\"",
+    "dev:full": "npm run dev"
   },
   "keywords": ["api-gateway", "fraud-detection", "ai", "fintech"],
   "author": "SafeRoute AI Team",
