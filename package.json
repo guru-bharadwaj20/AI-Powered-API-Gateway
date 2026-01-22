@@ -12,7 +12,7 @@
     "start:all": "concurrently \"npm run start:payment\" \"npm run start:account\" \"npm run start:verification\" \"npm run start:gateway\"",
     "start:frontend": "cd frontend && npm start",
     "dev:backend": "concurrently -k \"nodemon backend/gateway/server.js\" \"nodemon backend/services/payment-service.js\" \"nodemon backend/services/account-service.js\" \"nodemon backend/services/verification-service.js\"",
-    "dev": "concurrently -k -n BACKEND,FRONTEND \"npm start\" \"npm run start:frontend\"",
+    "dev": "node scripts/dev.js",
     "dev:full": "npm run dev"
   },
   "keywords": ["api-gateway", "fraud-detection", "ai", "fintech"],

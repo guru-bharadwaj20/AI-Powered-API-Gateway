@@ -23,7 +23,7 @@
        │
        ▼
 ┌─────────────────────────────────┐
-│   API Gateway (Port 3000)       │
+│   API Gateway (Port 4000)       │
 │   - Request Routing             │
 │   - AI Fraud Detection          │
 │   - Correlation ID Management   │
@@ -37,6 +37,8 @@
 │ Service │ │ Service │ │Service       │
 │ (3001)  │ │ (3002)  │ │(3003)        │
 └─────────┘ └─────────┘ └──────────────┘
+
+ React Dashboard (Dev): http://localhost:3000
 ```
 
 ## 🚀 Quick Start
@@ -61,7 +63,7 @@ cd ..
 
 **3. Start everything:**
 ```bash
-npm run dev:full
+npm run dev
 ```
 
 This starts all backend services and the React frontend automatically.
@@ -69,7 +71,7 @@ This starts all backend services and the React frontend automatically.
 ### Alternative: Start Services Separately
 
 ```bash
-# Terminal 1 - Backend services
+# Terminal 1 - Backend services (gateway + microservices)
 npm start
 
 # Terminal 2 - React frontend
@@ -82,7 +84,7 @@ npm run start:frontend
 AI-Powered-API-Gateway/
 ├── backend/
 │   ├── gateway/
-│   │   └── server.js          # API Gateway (Port 3000)
+│   │   └── server.js          # API Gateway (Port 4000)
 │   ├── services/
 │   │   ├── payment-service.js     # Payment Service (Port 3001)
 │   │   ├── account-service.js     # Account Service (Port 3002)
@@ -105,7 +107,7 @@ AI-Powered-API-Gateway/
 
 ## 📡 API Endpoints
 
-### Gateway Routes (Port 3000)
+### Gateway Routes (Port 4000)
 
 #### Payment Operations
 - `POST /api/payments` - Create payment transaction with fraud detection
@@ -122,8 +124,8 @@ AI-Powered-API-Gateway/
 - `POST /api/verify/email` - Verify email address
 
 #### System Endpoints
-- `GET /api/metrics` - Get real-time metrics and statistics
-- `GET /api/logs` - Get request logs with correlation IDs
+- `GET /metrics` - Get real-time metrics and statistics
+- `GET /logs` - Get request logs with correlation IDs
 - `GET /health` - Health check endpoint
 
 ## 🔍 Fraud Detection Rules
@@ -151,11 +153,11 @@ The AI engine analyzes requests using multiple detection rules:
 ### Available Scripts
 
 ```bash
-npm start              # Start API Gateway only
-npm run start:all      # Start all backend services
-npm run start:frontend # Start React frontend
-npm run dev:full       # Start everything (backend + frontend)
-npm run dev            # Start backend with nodemon (hot reload)
+npm start              # Start backend services (gateway + microservices)
+npm run start:all      # Start backend services (same goal as npm start)
+npm run start:frontend # Start React frontend only
+npm run dev            # Start everything (backend + frontend)
+npm run dev:backend    # Start backend services with nodemon (hot reload)
 ```
 
 ## 📊 Monitoring
@@ -166,6 +168,8 @@ Access the dashboard at `http://localhost:3000` after starting the services to v
 - Live request stream
 - AI analysis insights
 - Fraud detection patterns
+
+Gateway endpoints are available at `http://localhost:4000` (e.g. `/metrics`, `/logs`).
 
 ## 🔐 Security Features
 
