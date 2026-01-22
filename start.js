@@ -1,6 +1,8 @@
 const { spawn } = require('child_process');
 const http = require('http');
 
+const QUIET = process.env.SAFEROUTE_QUIET === '1';
+
 const services = [
     { name: 'Payment Service', script: 'backend/services/payment-service.js', port: 3001 },
     { name: 'Account Service', script: 'backend/services/account-service.js', port: 3002 },
@@ -33,7 +35,9 @@ function checkPort(port) {
 
 async function startService(service) {
     return new Promise((resolve) => {
-        console.log(`\n🚀 Starting ${service.name}...`);
+        if (!QUIET) {
+            console.log(`\n🚀 Starting ${service.name}...`);
+        }
         
         const proc = spawn('node', [service.script], {
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -41,14 +45,24 @@ async function startService(service) {
         });
 
         proc.stdout.on('data', (data) => {
-            const output = data.toString().trim();
-            if (output) {
-                console.log(`   ${service.name}: ${output}`);
+            const lines = data.toString().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            for (const line of lines) {
+                if (QUIET) {
+                    if (/running on port\s+\d+/i.test(line)) {
+                        console.log(line);
+                    }
+                    continue;
+                }
+
+                console.log(`   ${service.name}: ${line}`);
             }
         });
 
         proc.stderr.on('data', (data) => {
             const error = data.toString().trim();
+            if (QUIET) {
+                return;
+            }
             if (error && !error.includes('ExperimentalWarning')) {
                 console.error(`   ${service.name} Error: ${error}`);
             }
@@ -62,10 +76,12 @@ async function startService(service) {
 
         setTimeout(async () => {
             const isRunning = await checkPort(service.port);
-            if (isRunning) {
-                console.log(`   ✅ ${service.name} is running on port ${service.port}`);
-            } else {
-                console.log(`   ⏳ ${service.name} starting on port ${service.port}...`);
+            if (!QUIET) {
+                if (isRunning) {
+                    console.log(`   ✅ ${service.name} is running on port ${service.port}`);
+                } else {
+                    console.log(`   ⏳ ${service.name} starting on port ${service.port}...`);
+                }
             }
             resolve();
         }, 1500);
@@ -73,23 +89,27 @@ async function startService(service) {
 }
 
 async function startAllServices() {
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║         SafeRoute AI - Intelligent API Gateway            ║');
-    console.log('║              Starting All Services...                      ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
+    if (!QUIET) {
+        console.log('╔════════════════════════════════════════════════════════════╗');
+        console.log('║         SafeRoute AI - Intelligent API Gateway            ║');
+        console.log('║              Starting All Services...                      ║');
+        console.log('╚════════════════════════════════════════════════════════════╝');
+    }
 
     for (const service of services) {
         await startService(service);
     }
 
-    console.log('\n╔════════════════════════════════════════════════════════════╗');
-    console.log('║                  🎉 ALL SERVICES STARTED!                  ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
-    console.log('\n📊 Frontend:  http://localhost:3000');
-    console.log('🔌 Gateway:   http://localhost:4000');
-    console.log('📈 Metrics:   http://localhost:4000/metrics');
-    console.log('📋 Logs:      http://localhost:4000/logs');
-    console.log('\n💡 The dashboard will open automatically in your browser...\n');
+    if (!QUIET) {
+        console.log('\n╔════════════════════════════════════════════════════════════╗');
+        console.log('║                  🎉 ALL SERVICES STARTED!                  ║');
+        console.log('╚════════════════════════════════════════════════════════════╝');
+        console.log('\n📊 Frontend:  http://localhost:3000');
+        console.log('🔌 Gateway:   http://localhost:4000');
+        console.log('📈 Metrics:   http://localhost:4000/metrics');
+        console.log('📋 Logs:      http://localhost:4000/logs');
+        console.log('\n💡 The dashboard will open automatically in your browser...\n');
+    }
 
     setTimeout(() => {
         const open = require('child_process').exec;
@@ -108,16 +128,24 @@ async function startAllServices() {
         
         open(command, (error) => {
             if (error) {
-                console.log('⚠️  Please open http://localhost:3000 manually in your browser');
+                if (!QUIET) {
+                    console.log('⚠️  Please open http://localhost:3000 manually in your browser');
+                }
             } else {
-                console.log('✅ Browser opened automatically!');
+                if (QUIET) {
+                    console.log('Browser opened successfully!');
+                } else {
+                    console.log('✅ Browser opened automatically!');
+                }
             }
         });
     }, 2000);
 }
 
 function cleanup() {
-    console.log('\n\n🛑 Shutting down all services...');
+    if (!QUIET) {
+        console.log('\n\n🛑 Shutting down all services...');
+    }
     processes.forEach(proc => {
         try {
             proc.kill();
