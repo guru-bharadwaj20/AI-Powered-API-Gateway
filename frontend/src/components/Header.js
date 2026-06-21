@@ -52,8 +52,8 @@ const Header = ({
             </svg>
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">SafeRoute AI</h1>
-            <p className="text-white/70 text-xs hidden sm:block">Intelligent API Gateway</p>
+            <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">API Gateway</h1>
+            <p className="text-white/70 text-xs hidden sm:block">Fraud Detection Dashboard</p>
           </div>
         </div>
 

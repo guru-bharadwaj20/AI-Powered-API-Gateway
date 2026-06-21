@@ -21,7 +21,7 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const { notifications, addNotification } = useNotification();
-  const { metrics, refreshMetrics, resetMetrics: doResetMetrics } = useMetrics(API_BASE, autoRefresh);
+  const { metrics, timeline, refreshMetrics, resetMetrics: doResetMetrics } = useMetrics(API_BASE, autoRefresh);
   const { logs, refreshLogs, clearLogs: doClearLogs } = useLogs(API_BASE, autoRefresh, isPaused);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ function App() {
 
   const startTour = useCallback(() => {
     closeWelcomeModal();
-    addNotification('info', 'Tour Started', 'Follow the highlighted areas to learn about SafeRoute AI features.');
+    addNotification('info', 'Tour Started', 'Follow the highlighted areas to explore the gateway dashboard features.');
   }, [closeWelcomeModal, addNotification]);
 
   const sendTestRequest = async (endpoint, body, method = 'POST') => {
@@ -57,7 +57,7 @@ function App() {
       const data = await response.json();
       
       if (response.status === 403) {
-        addNotification('error', 'Request Blocked', `AI detected high fraud risk (Score: ${data.riskScore})`);
+        addNotification('error', 'Request Blocked', `Fraud engine blocked request (Risk score: ${data.riskScore})`);
         if (soundAlerts) playAlertSound();
       } else if (data.riskLevel === 'SUSPICIOUS') {
         addNotification('warning', 'Suspicious Activity', `Request flagged for monitoring (Score: ${data.riskScore})`);
@@ -205,8 +205,9 @@ function App() {
           }}
         />
         
-        <Dashboard 
+        <Dashboard
           metrics={metrics}
+          timeline={timeline}
           logs={logs}
           isPaused={isPaused}
           onTogglePause={() => {
