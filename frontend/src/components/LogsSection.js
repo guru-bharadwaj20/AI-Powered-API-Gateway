@@ -1,25 +1,16 @@
 import React, { useState } from 'react';
 
+const RISK = {
+  NORMAL:    { icon: '🟢', color: '#10b981', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  SUSPICIOUS:{ icon: '🟡', color: '#f59e0b', cls: 'bg-amber-50 text-amber-700 border-amber-200'     },
+  HIGH_RISK: { icon: '🔴', color: '#ef4444', cls: 'bg-red-50 text-red-700 border-red-200'            }
+};
+
 const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
   const [filter, setFilter] = useState('all');
 
-  const getRiskIcon = (level) => {
-    const icons = {
-      NORMAL: '🟢',
-      SUSPICIOUS: '🟡',
-      HIGH_RISK: '🔴'
-    };
-    return icons[level] || '⚪';
-  };
-
-  const getRiskColor = (level) => {
-    if (level === 'HIGH_RISK') return '#ef4444';
-    if (level === 'SUSPICIOUS') return '#f59e0b';
-    return '#10b981';
-  };
-
-  const filteredLogs = filter === 'all' 
-    ? logs 
+  const filteredLogs = filter === 'all'
+    ? logs
     : logs.filter(log => log.aiDecision?.riskLevel === filter);
 
   return (
@@ -30,82 +21,97 @@ const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
           >
-            <option value="all">All Requests</option>
-            <option value="NORMAL">Normal Only</option>
-            <option value="SUSPICIOUS">Suspicious Only</option>
-            <option value="HIGH_RISK">High Risk Only</option>
+            <option value="all">All</option>
+            <option value="NORMAL">Normal</option>
+            <option value="SUSPICIOUS">Suspicious</option>
+            <option value="HIGH_RISK">High Risk</option>
           </select>
           <button
             onClick={onTogglePause}
-            className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-1.5"
           >
-            <span>{isPaused ? '▶️' : '⏸️'}</span>
-            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+            {isPaused ? (
+              <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>Resume</>
+            ) : (
+              <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z"/></svg>Pause</>
+            )}
           </button>
+          {isPaused && (
+            <span className="px-2 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg font-medium">PAUSED</span>
+          )}
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-soft p-3 sm:p-4 max-h-[400px] lg:max-h-[500px] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-soft p-3 sm:p-4 max-h-[440px] overflow-y-auto">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <div className="text-5xl mb-3">📭</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
               {filter === 'all' ? 'No Requests Yet' : 'No Matching Requests'}
             </h3>
-            <p className="text-gray-500">
-              {filter === 'all' 
-                ? 'Send a test request or run a demo scenario to see activity here.'
-                : 'No requests match the current filter. Try changing the filter or send more requests.'
-              }
+            <p className="text-gray-400 text-sm">
+              {filter === 'all'
+                ? 'Send a test request or run a demo scenario to start monitoring traffic.'
+                : 'Try a different filter or send more requests.'}
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredLogs.slice(0, 20).map((log, index) => {
-              const statusClass = log.response?.statusCode >= 200 && log.response?.statusCode < 300 ? 'success' : 'blocked';
-              const time = new Date(log.timestamp).toLocaleTimeString('en-US', { 
-                hour12: true, 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
+          <div className="space-y-1.5">
+            {filteredLogs.slice(0, 30).map((log, i) => {
+              const risk = RISK[log.aiDecision?.riskLevel] || RISK.NORMAL;
+              const isBlocked = log.routing?.routingDecision === 'BLOCKED';
+              const statusCode = log.response?.statusCode;
+              const time = new Date(log.timestamp).toLocaleTimeString('en-US', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
               });
-              const riskColor = getRiskColor(log.aiDecision?.riskLevel);
 
               return (
                 <div
-                  key={index}
+                  key={i}
                   onClick={() => onShowDetail(log)}
-                  className="border-l-4 border-primary bg-gray-50 hover:bg-gray-100 p-2 sm:p-3 rounded-lg cursor-pointer transition-colors duration-200"
+                  className="flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors duration-150 border border-transparent hover:border-gray-200"
                 >
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-500 font-mono">{time}</span>
-                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
-                        {log.request?.method || 'POST'}
+                  {/* Risk indicator */}
+                  <div
+                    className="w-1 self-stretch rounded-full flex-shrink-0"
+                    style={{ backgroundColor: risk.color, minHeight: '32px' }}
+                  ></div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className="text-xs text-gray-400 font-mono">{time}</span>
+                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
+                        {log.request?.method}
                       </span>
-                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-[150px] sm:max-w-none">
-                        {log.request?.endpoint || '/api/payments'}
+                      <span className="text-xs font-medium text-gray-800 truncate max-w-[200px]">
+                        {log.request?.endpoint}
                       </span>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                        statusClass === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      <span className={`px-1.5 py-0.5 text-xs font-semibold rounded ${
+                        statusCode >= 200 && statusCode < 300
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-red-100 text-red-700'
                       }`}>
-                        {log.response?.statusCode || 200}
+                        {statusCode}
                       </span>
+                      {isBlocked && (
+                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-red-600 text-white">
+                          BLOCKED
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <div>
-                    <span 
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold"
-                      style={{ 
-                        backgroundColor: `${riskColor}20`, 
-                        color: riskColor,
-                        border: `1px solid ${riskColor}40` 
-                      }}
-                    >
-                      {getRiskIcon(log.aiDecision?.riskLevel)} Risk: {log.aiDecision?.riskScore || 0}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${risk.cls}`}>
+                        {risk.icon} {log.aiDecision?.riskLevel?.replace('_', ' ')} · {log.aiDecision?.riskScore}
+                      </span>
+                      {log.routing?.targetService && (
+                        <span className="text-xs text-gray-400">→ {log.routing.targetService}</span>
+                      )}
+                      {log.response?.responseTime && (
+                        <span className="text-xs text-gray-400">{log.response.responseTime}ms</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

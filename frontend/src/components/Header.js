@@ -1,118 +1,137 @@
 import React, { useState } from 'react';
 
-const Header = ({ 
-  metrics, 
+const Header = ({
+  metrics,
   onToggleMobileMenu,
   isMobileMenuOpen,
-  onToggleAutoRefresh, 
-  onToggleSoundAlerts, 
-  onClearLogs, 
-  onResetMetrics, 
+  onToggleAutoRefresh,
+  onToggleSoundAlerts,
+  onClearLogs,
+  onResetMetrics,
   onExportData,
   autoRefresh,
-  soundAlerts 
+  soundAlerts
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const getSystemStatus = () => {
-    if (!metrics) return { color: 'bg-red-500', text: 'System Error' };
-    const isHealthy = metrics.requests.total > 0;
-    return {
-      color: isHealthy ? 'bg-green-500' : 'bg-yellow-500',
-      text: isHealthy ? 'All Systems Operational' : 'Initializing...'
-    };
-  };
+  const totalRequests = metrics?.requests?.total || 0;
+  const blockedCount  = metrics?.requests?.blocked || 0;
+  const uptime        = metrics?.uptime || 0;
 
-  const status = getSystemStatus();
+  const isHealthy = totalRequests > 0;
+
+  const formatUptime = (s) => {
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  };
 
   return (
     <header className="gradient-primary shadow-large sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 flex justify-between items-center">
-        {/* Hamburger Menu - Mobile Only */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 flex justify-between items-center">
+
+        {/* Mobile hamburger */}
         <button
           onClick={onToggleMobileMenu}
           className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
           aria-label="Toggle menu"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {isMobileMenuOpen ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            )}
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {isMobileMenuOpen
+              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            }
           </svg>
         </button>
 
-        {/* Logo Section */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          <span className="text-3xl sm:text-4xl lg:text-5xl animate-float drop-shadow-lg">🛡️</span>
-          <div className="flex flex-col">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white tracking-tight bg-gradient-to-r from-white to-indigo-100 bg-clip-text text-transparent">
-              SafeRoute AI
-            </h1>
-            <span className="text-white/70 text-xs sm:text-sm font-medium tracking-wide hidden sm:block">
-              Intelligent API Gateway
-            </span>
+        {/* Brand */}
+        <div className="flex items-center gap-3">
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-2 hidden sm:flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">SafeRoute AI</h1>
+            <p className="text-white/70 text-xs hidden sm:block">Intelligent API Gateway</p>
           </div>
         </div>
 
-        {/* Right Section */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          {/* Status Indicator */}
-          <div className="hidden md:flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-lg`}></div>
-            <span className="text-white text-xs lg:text-sm font-medium hidden lg:block">{status.text}</span>
+        {/* Stats — desktop */}
+        <div className="hidden lg:flex items-center gap-4">
+          <Stat label="Requests" value={totalRequests.toLocaleString()} />
+          <Stat label="Blocked" value={blockedCount.toLocaleString()} highlight={blockedCount > 0} />
+          {uptime > 0 && <Stat label="Uptime" value={formatUptime(uptime)} />}
+        </div>
+
+        {/* Right controls */}
+        <div className="flex items-center gap-2">
+          {/* Status dot */}
+          <div className="hidden md:flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${isHealthy ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`}></div>
+            <span className="text-white/80 text-xs hidden lg:block">
+              {isHealthy ? 'Operational' : 'Initializing'}
+            </span>
           </div>
 
-          {/* Settings Dropdown */}
+          {/* Auto-refresh toggle */}
+          <button
+            onClick={onToggleAutoRefresh}
+            title={autoRefresh ? 'Pause auto-refresh' : 'Enable auto-refresh'}
+            className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60'} hover:bg-white/25`}
+          >
+            <svg className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} style={autoRefresh ? { animationDuration: '3s' } : {}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+
+          {/* Settings dropdown */}
           <div className="relative">
             <button
-              className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/20 transition-all duration-300"
               onClick={() => setShowDropdown(!showDropdown)}
+              className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
             >
-              <span className="hidden sm:inline">⚙️ Settings</span>
-              <span className="sm:hidden">⚙️</span>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="hidden sm:inline">Settings</span>
             </button>
-            
+
             {showDropdown && (
               <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setShowDropdown(false)}
-                ></div>
-                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-large w-64 z-50">
-                  <MenuItem 
-                    icon="🔄" 
-                    title="Auto-Refresh" 
-                    subtitle="Toggle automatic dashboard updates"
+                <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-large w-60 z-50 overflow-hidden">
+                  <DropdownItem
+                    icon={autoRefresh ? '⏸' : '▶'}
+                    label={autoRefresh ? 'Pause Auto-Refresh' : 'Resume Auto-Refresh'}
+                    hint={autoRefresh ? 'Currently refreshing every 2s' : 'Dashboard is paused'}
                     onClick={onToggleAutoRefresh}
-                    active={autoRefresh}
                   />
-                  <MenuItem 
-                    icon="🔔" 
-                    title="Sound Alerts" 
-                    subtitle="Enable audio notifications"
+                  <DropdownItem
+                    icon={soundAlerts ? '🔇' : '🔔'}
+                    label={soundAlerts ? 'Mute Alerts' : 'Enable Sound Alerts'}
+                    hint="Audio on high-risk detections"
                     onClick={onToggleSoundAlerts}
-                    active={soundAlerts}
                   />
-                  <MenuItem 
-                    icon="🗑️" 
-                    title="Clear Logs" 
-                    subtitle="Remove all request logs"
+                  <DropdownItem
+                    icon="📥"
+                    label="Export Data"
+                    hint="Download metrics & logs as JSON"
+                    onClick={() => { setShowDropdown(false); onExportData(); }}
+                  />
+                  <DropdownItem
+                    icon="🗑"
+                    label="Clear Logs"
+                    hint="Remove all request logs"
                     onClick={() => { setShowDropdown(false); onClearLogs(); }}
                   />
-                  <MenuItem 
-                    icon="↺" 
-                    title="Reset Metrics" 
-                    subtitle="Clear all statistics"
+                  <DropdownItem
+                    icon="↺"
+                    label="Reset Metrics"
+                    hint="Zero out all statistics"
                     onClick={() => { setShowDropdown(false); onResetMetrics(); }}
-                  />
-                  <MenuItem 
-                    icon="📥" 
-                    title="Export Data" 
-                    subtitle="Download metrics and logs"
-                    onClick={() => { setShowDropdown(false); onExportData(); }}
-                    isLast
+                    last
                   />
                 </div>
               </>
@@ -124,24 +143,24 @@ const Header = ({
   );
 };
 
-const MenuItem = ({ icon, title, subtitle, onClick, active, isLast }) => (
-  <div
-    className={`px-4 py-2.5 cursor-pointer transition-all duration-200 flex items-center gap-2 hover:bg-gray-50 hover:pl-5 ${!isLast ? 'border-b border-gray-200' : ''}`}
-    onClick={onClick}
-  >
-    <span className="text-xl">{icon}</span>
-    <div className="flex-1">
-      <div className="font-semibold text-gray-900 text-sm flex items-center gap-2">
-        {title}
-        {active !== undefined && (
-          <span className={`text-xs px-2 py-0.5 rounded ${active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-            {active ? 'ON' : 'OFF'}
-          </span>
-        )}
-      </div>
-      <div className="text-xs text-gray-500">{subtitle}</div>
-    </div>
+const Stat = ({ label, value, highlight }) => (
+  <div className="text-center">
+    <div className={`text-sm font-bold ${highlight ? 'text-red-300' : 'text-white'}`}>{value}</div>
+    <div className="text-white/60 text-xs">{label}</div>
   </div>
+);
+
+const DropdownItem = ({ icon, label, hint, onClick, last }) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors ${!last ? 'border-b border-gray-100' : ''}`}
+  >
+    <span className="text-lg flex-shrink-0 mt-0.5">{icon}</span>
+    <div>
+      <div className="text-sm font-medium text-gray-900">{label}</div>
+      <div className="text-xs text-gray-400">{hint}</div>
+    </div>
+  </button>
 );
 
 export default Header;

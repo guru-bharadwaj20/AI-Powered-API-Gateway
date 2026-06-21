@@ -5,136 +5,122 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const ScenarioButtons = ({ apiBase, addNotification, refreshDashboard, soundAlerts }) => {
   const [runningScenario, setRunningScenario] = useState(null);
 
-  const sendScenarioRequest = async (body) => {
+  const post = async (body) => {
     try {
       await fetch(`${apiBase}/api/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
+    } catch (err) {
+      console.error('Scenario request failed:', err);
+    }
+  };
+
+  const playAlert = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 800;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+    } catch {}
+  };
+
+  const executeScenario = async (id) => {
+    setRunningScenario(id);
+    try {
+      await run(id);
+    } finally {
       await refreshDashboard();
-    } catch (error) {
-      console.error('Scenario request failed:', error);
+      setRunningScenario(null);
     }
   };
 
-  const playAlertSound = () => {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
-  };
-
-  const executeScenario = async (scenario) => {
-    setRunningScenario(scenario);
-
-    const scenarios = {
-      normal: async () => {
+  const run = async (id) => {
+    switch (id) {
+      case 'normal':
         addNotification('info', 'Running Scenario', 'Sending normal transaction...');
-        await sendScenarioRequest({
-          userId: 'user_12345',
-          amount: 500,
-          currency: 'USD',
-          recipient: 'merchant_789'
-        });
+        await post({ userId: 'user_12345', amount: 350, currency: 'USD', recipient: 'merchant_789' });
         addNotification('success', 'Scenario Complete', 'Normal transaction processed successfully.');
-      },
-      'rapid-fire': async () => {
-        addNotification('info', 'Running Scenario', 'Simulating rapid fire attack (30 requests)...');
-        
-        for (let i = 0; i < 30; i++) {
-          await sendScenarioRequest({
-            userId: 'attacker_123',
-            amount: 1000,
-            currency: 'USD',
-            recipient: 'merchant_789'
-          });
-          await sleep(2000);
-        }
-        
-        addNotification('warning', 'Scenario Complete', 'Rapid fire attack detected and blocked by AI!');
-        if (soundAlerts) playAlertSound();
-      },
-      'high-value': async () => {
-        addNotification('info', 'Running Scenario', 'Sending high-value transaction...');
-        await sendScenarioRequest({
-          userId: 'user_12345',
-          amount: 15000,
-          currency: 'USD',
-          recipient: 'merchant_789'
-        });
-        addNotification('warning', 'Scenario Complete', 'High-value anomaly detected by AI.');
-      },
-      'off-hours': async () => {
-        addNotification('info', 'Running Scenario', 'Simulating off-hours activity...');
-        await sendScenarioRequest({
-          userId: 'user_12345',
-          amount: 5000,
-          currency: 'USD',
-          recipient: 'merchant_789'
-        });
-        addNotification('warning', 'Scenario Complete', 'Off-hours activity flagged for monitoring.');
-      },
-      combined: async () => {
-        addNotification('info', 'Running Scenario', 'Triggering multiple fraud indicators...');
-        
-        for (let i = 0; i < 25; i++) {
-          await sendScenarioRequest({
-            userId: 'attacker_456',
-            amount: 12000,
-            currency: 'USD',
-            recipient: 'merchant_789'
-          });
-          await sleep(2000);
-        }
-        
-        addNotification('error', 'Scenario Complete', 'Critical threat detected! Multiple fraud indicators triggered.');
-        if (soundAlerts) playAlertSound();
-      }
-    };
+        break;
 
-    if (scenarios[scenario]) {
-      await scenarios[scenario]();
+      case 'rapid-fire':
+        addNotification('info', 'Running Scenario', 'Simulating rapid fire attack — 25 requests...');
+        for (let i = 0; i < 25; i++) {
+          await post({ userId: 'attacker_rf', amount: 100, currency: 'USD', recipient: 'merchant_789' });
+          await sleep(100); // fast enough to trigger RAPID_FIRE (>10 in 60s)
+          if (i === 11) await refreshDashboard(); // mid-scenario refresh
+        }
+        addNotification('warning', 'Scenario Complete', 'Rapid fire attack detected and blocked by AI!');
+        if (soundAlerts) playAlert();
+        break;
+
+      case 'high-value': {
+        addNotification('info', 'Running Scenario', 'Building transaction history then sending outlier...');
+        // Seed normal transactions so mean is well established
+        for (let i = 0; i < 12; i++) {
+          await post({ userId: 'user_hv', amount: 200 + Math.floor(Math.random() * 200), currency: 'USD', recipient: 'merchant_789' });
+          await sleep(60);
+        }
+        // Now send the statistical outlier
+        await post({ userId: 'user_hv', amount: 25000, currency: 'USD', recipient: 'merchant_789' });
+        addNotification('warning', 'Scenario Complete', 'High-value anomaly flagged by statistical outlier detection.');
+        break;
+      }
+
+      case 'off-hours':
+        addNotification('info', 'Running Scenario', 'Simulating off-hours large transaction...');
+        await post({ userId: 'user_night', amount: 8500, currency: 'USD', recipient: 'merchant_789' });
+        addNotification('warning', 'Scenario Complete', 'Off-hours high-value transaction flagged for monitoring.');
+        break;
+
+      case 'combined':
+        addNotification('info', 'Running Scenario', 'Triggering multiple fraud indicators simultaneously...');
+        for (let i = 0; i < 22; i++) {
+          await post({ userId: 'attacker_multi', amount: 15000, currency: 'USD', recipient: 'suspicious_acct' });
+          await sleep(80);
+          if (i === 10) await refreshDashboard();
+        }
+        addNotification('error', 'Scenario Complete', 'Critical threat! Rapid fire + high value + sequential patterns all detected.');
+        if (soundAlerts) playAlert();
+        break;
+
+      default:
+        break;
     }
-    
-    setRunningScenario(null);
   };
 
   const scenarios = [
-    { id: 'normal', icon: '🟢', title: 'Normal Transaction', subtitle: 'Typical payment, low risk' },
-    { id: 'rapid-fire', icon: '🔴', title: 'Rapid Fire Attack', subtitle: '30 requests in 60 seconds' },
-    { id: 'high-value', icon: '🟡', title: 'High-Value Anomaly', subtitle: 'Payment 10x above average' },
-    { id: 'off-hours', icon: '🟡', title: 'Off-Hours Activity', subtitle: 'Large payment at 2 AM' },
-    { id: 'combined', icon: '🔴', title: 'Combined Threat', subtitle: 'Multiple fraud indicators' }
+    { id: 'normal',     icon: '🟢', title: 'Normal Transaction',   sub: 'Legitimate payment, low risk',           color: 'hover:border-emerald-500 hover:bg-emerald-50' },
+    { id: 'rapid-fire', icon: '⚡', title: 'Rapid Fire Attack',    sub: '25 requests in quick succession',        color: 'hover:border-red-500 hover:bg-red-50' },
+    { id: 'high-value', icon: '💰', title: 'High-Value Anomaly',   sub: 'Statistical outlier: 100× above avg',   color: 'hover:border-amber-500 hover:bg-amber-50' },
+    { id: 'off-hours',  icon: '🌙', title: 'Off-Hours Activity',   sub: '$8,500 payment at unusual hours',        color: 'hover:border-amber-500 hover:bg-amber-50' },
+    { id: 'combined',   icon: '🚨', title: 'Combined Threat',      sub: 'Rapid fire + high value + sequential',  color: 'hover:border-red-500 hover:bg-red-50' }
   ];
 
   return (
     <div className="space-y-2">
-      {scenarios.map((scenario) => (
+      {scenarios.map((s) => (
         <button
-          key={scenario.id}
-          onClick={() => executeScenario(scenario.id)}
+          key={s.id}
+          onClick={() => executeScenario(s.id)}
           disabled={runningScenario !== null}
-          className="w-full flex items-start gap-2 p-2.5 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`w-full flex items-center gap-2.5 p-2.5 border-2 border-gray-200 rounded-lg ${s.color} transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          <span className="text-xl flex-shrink-0">{scenario.icon}</span>
+          <span className="text-xl flex-shrink-0">{s.icon}</span>
           <div className="flex-1 text-left min-w-0">
-            <div className="text-sm font-semibold text-gray-900">{scenario.title}</div>
-            <div className="text-xs text-gray-500">{scenario.subtitle}</div>
+            <div className="text-sm font-semibold text-gray-900">{s.title}</div>
+            <div className="text-xs text-gray-500 truncate">{s.sub}</div>
           </div>
-          {runningScenario === scenario.id && (
-            <span className="text-primary animate-spin">⏳</span>
+          {runningScenario === s.id && (
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
           )}
         </button>
       ))}

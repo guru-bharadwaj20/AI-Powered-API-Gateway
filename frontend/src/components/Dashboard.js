@@ -1,32 +1,32 @@
 import React from 'react';
+import ServiceStatus from './ServiceStatus';
 import MetricsSection from './MetricsSection';
-import RiskSection from './RiskSection';
 import ChartsSection from './ChartsSection';
 import LogsSection from './LogsSection';
 import AnalysisSection from './AnalysisSection';
 
-const Dashboard = ({ 
-  metrics, 
-  logs, 
-  isPaused, 
-  onTogglePause, 
+const Dashboard = ({
+  metrics,
+  logs,
+  isPaused,
+  onTogglePause,
   onShowDetail,
   addNotification,
-  apiBase 
+  apiBase
 }) => {
   return (
     <main className="flex-1 space-y-4 lg:space-y-6 min-w-0">
+      <ServiceStatus />
       <MetricsSection metrics={metrics} />
-      <RiskSection metrics={metrics} />
       <ChartsSection metrics={metrics} />
-      <LogsSection 
-        logs={logs} 
-        isPaused={isPaused} 
+      <LogsSection
+        logs={logs}
+        isPaused={isPaused}
         onTogglePause={onTogglePause}
         onShowDetail={onShowDetail}
       />
-      <AnalysisSection 
-        metrics={metrics} 
+      <AnalysisSection
+        metrics={metrics}
         logs={logs}
         addNotification={addNotification}
         onShowDetail={onShowDetail}
