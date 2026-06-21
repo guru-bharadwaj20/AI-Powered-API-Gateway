@@ -7,6 +7,7 @@ import AnalysisSection from './AnalysisSection';
 
 const Dashboard = ({
   metrics,
+  timeline,
   logs,
   isPaused,
   onTogglePause,
@@ -18,7 +19,7 @@ const Dashboard = ({
     <main className="flex-1 space-y-4 lg:space-y-6 min-w-0">
       <ServiceStatus />
       <MetricsSection metrics={metrics} />
-      <ChartsSection metrics={metrics} />
+      <ChartsSection metrics={metrics} timeline={timeline} />
       <LogsSection
         logs={logs}
         isPaused={isPaused}

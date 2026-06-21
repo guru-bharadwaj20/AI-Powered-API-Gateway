@@ -1,201 +1,236 @@
-# SafeRoute AI — Intelligent API Gateway with Fraud Detection
+# API Gateway — Explainable Fraud Detection
 
-A full-stack Node.js + React application that demonstrates an **AI-powered API Gateway** for fintech platforms. Every incoming API request is analyzed by a rule-based fraud-detection engine before being routed to the appropriate microservice. A live React dashboard monitors all traffic in real-time.
+A production-grade API gateway with a **rule-based fraud detection engine**, structured persistence, rate limiting, JWT authentication, OpenAPI docs, and a real-time SOC dashboard.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                  React Dashboard (port 3000)             │
-│  Metrics · Risk Charts · Live Stream · AI Insights       │
-└────────────────────────┬─────────────────────────────────┘
-                         │ fetches /metrics /logs /health
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│              API Gateway  (port 4000)                    │
-│  ┌──────────────────┐   ┌───────────────────────────┐   │
-│  │  Fraud Detection │ → │  Intelligent Router       │   │
-│  │  (rule engine)   │   │  BLOCK / ALLOW / MONITOR  │   │
-│  └──────────────────┘   └────────────┬──────────────┘   │
-└───────────────────────────────────────┼──────────────────┘
-                          ┌─────────────┼─────────────┐
-                          ▼             ▼             ▼
-                   ┌──────────┐ ┌──────────┐ ┌──────────────┐
-                   │ Payment  │ │ Account  │ │Verification  │
-                   │ Svc 3001 │ │ Svc 3002 │ │Svc 3003      │
-                   └──────────┘ └──────────┘ └──────────────┘
+Browser (React + Vite)   :3000
+        │
+        ▼
+API Gateway              :4000   ── rate limit, JWT, Zod validation
+        │
+        ├── Fraud Detection Service :4001   (7-rule engine, confidence scoring)
+        │
+        ├── Payment Service         :3001
+        ├── Account Service         :3002
+        └── Verification Service    :3003
+```
+
+All API traffic is scored by the Fraud Detection Service before being forwarded downstream.
+Requests that exceed the HIGH_RISK threshold are **blocked** with a 403 response.
+The engine is fully deterministic and explainable — no machine learning, no black-box decisions.
+
+---
+
+## Quick Start
+
+### Local (Node.js)
+
+```bash
+# Install all dependencies
+npm install
+cd frontend && npm install && cd ..
+
+# Build the React dashboard
+cd frontend && npm run build && cd ..
+
+# Start all 5 backend services + open browser
+npm start
+```
+
+Services start in order: Payment → Account → Verification → Fraud → Gateway.
+Dashboard: `http://localhost:3000`
+
+### Docker (one command)
+
+```bash
+docker compose up --build
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, Vite 6, Tailwind CSS 3, Chart.js 4 |
-| Backend | Node.js, Express 4 |
-| AI Engine | Custom rule-based scoring (no external API needed) |
-| Dev tooling | Concurrently, Nodemon |
+| Layer            | Technology                                          |
+|------------------|-----------------------------------------------------|
+| Frontend         | React 19, Vite 6, Tailwind CSS 3, Chart.js 4        |
+| API Gateway      | Node.js 22, Express 4                               |
+| Fraud Engine     | Standalone HTTP microservice (port 4001)            |
+| Logging          | Pino (structured JSON / coloured dev output)        |
+| Validation       | Zod 3 (request body schemas)                        |
+| Auth             | jsonwebtoken (optional Bearer token)                |
+| API Docs         | OpenAPI 3.0 via swagger-ui-express                  |
+| Persistence      | JSON file repository (swap for PostgreSQL)          |
+| Rate Limiting    | Sliding-window in-memory (Redis-ready interface)    |
 
 ---
 
-## Quick Start
+## Service Ports
 
-### Prerequisites
-- **Node.js 18+** and **npm**
+| Service            | Port |
+|--------------------|------|
+| React Dashboard    | 3000 |
+| Payment Service    | 3001 |
+| Account Service    | 3002 |
+| Verification Svc   | 3003 |
+| API Gateway        | 4000 |
+| Fraud Detection    | 4001 |
 
-### 1 — Install dependencies
+---
 
-```bash
-# Root (backend)
-npm install
+## API Reference
 
-# Frontend
-cd frontend
-npm install
-cd ..
+### Payment Routes
+
+| Method | Path                          | Description                |
+|--------|-------------------------------|----------------------------|
+| POST   | /api/payments                 | Create a payment           |
+| GET    | /api/payments/:transactionId  | Get payment by ID          |
+
+### Account Routes
+
+| Method | Path                        | Description        |
+|--------|-----------------------------|--------------------|
+| POST   | /api/accounts               | Create an account  |
+| GET    | /api/accounts/:accountId    | Get account by ID  |
+| PUT    | /api/accounts/:accountId    | Update an account  |
+
+### Verification Routes
+
+| Method | Path                    | Description              |
+|--------|-------------------------|--------------------------|
+| POST   | /api/verify/identity    | Verify user identity     |
+| POST   | /api/verify/transaction | Verify a transaction     |
+
+### Auth
+
+| Method | Path              | Description               |
+|--------|-------------------|---------------------------|
+| POST   | /api/auth/token   | Issue JWT (if configured) |
+
+### System / Observability
+
+| Method | Path                      | Description                         |
+|--------|---------------------------|-------------------------------------|
+| GET    | /health                   | Gateway health check                |
+| GET    | /metrics                  | JSON metrics snapshot               |
+| GET    | /metrics/prometheus       | Prometheus-compatible text metrics  |
+| GET    | /logs                     | Paginated request log               |
+| GET    | /logs/timeline            | Minute-by-minute risk breakdown     |
+| GET    | /logs/endpoint-heatmap    | Request counts per endpoint         |
+| GET    | /logs/fraud-events        | HIGH_RISK fraud event log           |
+| GET    | /api/fraud-patterns       | Triggered rule frequency table      |
+| POST   | /api/clear-logs           | Clear persisted request logs        |
+| POST   | /api/reset-metrics        | Reset all metrics and logs          |
+| GET    | /api-docs                 | Swagger UI (OpenAPI 3.0)            |
+
+---
+
+## Fraud Detection Engine
+
+Runs as a standalone HTTP microservice on port 4001.  
+**All rules are deterministic and traceable.** Every decision includes:
+
+- `riskScore` (0–100)
+- `riskLevel` — `NORMAL` / `SUSPICIOUS` / `HIGH_RISK`
+- `confidence` (0–1)
+- `recommendation` — `ALLOW_NORMAL` / `ALLOW_WITH_MONITORING` / `REQUIRE_ADDITIONAL_AUTH` / `BLOCK_AND_VERIFY`
+- `triggeredRules[]` — per-rule `severity`, `score`, `reasoning`
+- `explanation` — one human-readable sentence
+
+### Rules
+
+| Rule ID             | What It Detects                                          |
+|---------------------|----------------------------------------------------------|
+| RAPID_FIRE          | Too many requests from one IP in the sliding window      |
+| PAYLOAD_ANOMALY     | Transaction amount is a z-score outlier vs. rolling mean |
+| TIME_BASED          | High-value transaction outside 09:00–21:00 window        |
+| SEQUENTIAL_PATTERN  | Identical payload hash repeated within time window       |
+| CREDENTIAL_STUFFING | Multiple distinct userIds from the same IP               |
+| BURST_TRANSFER      | Rapid payments from same user to same recipient          |
+| VELOCITY_SPIKE      | Sudden acceleration vs. EMA baseline per IP              |
+
+Every rule can be individually enabled/disabled and weighted via environment variables (see `.env.example`).
+
+---
+
+## Authentication (Optional)
+
+JWT authentication is **disabled by default**. To enable:
+
+1. Set `JWT_SECRET` in `.env`
+2. Set `REQUIRE_AUTH=true`
+3. Obtain a token: `POST /api/auth/token { "username": "admin", "password": "any" }`
+4. Pass header: `Authorization: Bearer <token>`
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env`. Key variables:
+
+```env
+NODE_ENV=development
+JWT_SECRET=                    # empty = auth disabled
+REQUIRE_AUTH=false
+FRAUD_HIGH_RISK_THRESHOLD=70   # block requests at or above this score
+FRAUD_RAPID_FIRE_COUNT=20      # requests in window before RAPID_FIRE fires
+RATE_LIMIT_MAX_REQUESTS=120    # per IP per minute
+LOG_PRETTY=true                # false = JSON (production)
 ```
 
-### 2 — Start everything
+All rule weights and thresholds are individually configurable — see `.env.example`.
 
-```bash
-npm run dev
-```
+---
 
-This single command starts all four backend services and the Vite dev server. The browser opens automatically at **http://localhost:3000**.
+## Dashboard Features
 
-### Alternative: start backend and frontend separately
-
-```bash
-# Terminal 1 — all backend services
-npm start
-
-# Terminal 2 — React dev server
-cd frontend && npm start
-```
+- **Service Status** — live health badge per service (polls every 10 s)
+- **Metrics Cards** — total, blocked, average risk score, average latency, uptime
+- **Traffic Timeline** — 15-minute line chart (normal / suspicious / high-risk per minute)
+- **Risk Score Histogram** — distribution across 10-point score buckets
+- **Fraud Rules Chart** — all 7 rules, trigger counts
+- **Risk Level Doughnut** — proportional risk breakdown
+- **Live Request Stream** — filterable, clickable log with confidence scores
+- **Risk Analysis & Insights** — auto-generated threat alerts with drill-down
+- **Demo Scenarios** — 7 pre-built attack simulations
 
 ---
 
 ## Project Structure
 
 ```
-AI-Powered-API-Gateway/
 ├── backend/
+│   ├── fraud-service/
+│   │   ├── engine.js          FraudDetectionEngine — 7 rules, explainability
+│   │   └── server.js          Express HTTP service (port 4001)
 │   ├── gateway/
-│   │   └── server.js           # API Gateway — port 4000
+│   │   ├── server.js          API gateway (port 4000)
+│   │   └── swagger.js         OpenAPI 3.0 specification
 │   ├── services/
-│   │   ├── payment-service.js  # Payment microservice — port 3001
-│   │   ├── account-service.js  # Account microservice — port 3002
-│   │   └── verification-service.js  # Verification microservice — port 3003
-│   └── ai/
-│       └── fraud-detection.js  # Fraud detection engine
-│
-├── frontend/
-│   ├── index.html              # Vite entry point
-│   ├── vite.config.js          # Vite + proxy config
-│   ├── tailwind.config.js
-│   └── src/
-│       ├── components/         # React UI components
-│       ├── hooks/              # useMetrics, useLogs, useNotification
-│       ├── App.js
-│       └── index.js
-│
-├── scripts/
-│   └── dev.js                  # Orchestrates backend + frontend together
-├── start.js                    # Starts backend services only
-└── package.json
+│   │   ├── payment-service.js      (port 3001)
+│   │   ├── account-service.js      (port 3002)
+│   │   └── verification-service.js (port 3003)
+│   └── shared/
+│       ├── config.js          Central env-driven configuration
+│       ├── db.js              JSON file repository (atomic writes)
+│       ├── logger.js          Pino logger factory
+│       ├── rateLimiter.js     Sliding-window rate limiter
+│       └── validators.js      Zod request schemas
+├── frontend/                  React + Vite + Tailwind dashboard
+├── docker-compose.yml
+├── Dockerfile.gateway / .fraud / .services / .frontend
+├── .env.example
+└── start.js                   Node process orchestrator
 ```
 
 ---
 
-## API Reference
+## Production Notes
 
-All routes are served by the gateway on **port 4000**. Each request is analyzed by the fraud engine before forwarding.
-
-### Payment Operations
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/payments` | Create a payment (fraud-checked) |
-| `GET`  | `/api/payments/:transactionId` | Retrieve a transaction |
-
-### Account Operations
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/accounts` | Create an account |
-| `GET`  | `/api/accounts/:accountId` | Get account details |
-| `PUT`  | `/api/accounts/:accountId` | Update account |
-
-### Verification Operations
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/verify/identity` | Verify user identity |
-| `POST` | `/api/verify/transaction` | Verify a transaction |
-
-### System Endpoints
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Gateway health check |
-| `GET` | `/metrics` | Real-time metrics JSON |
-| `GET` | `/logs?limit=N&riskLevel=X` | Filtered request logs |
-| `GET` | `/api/fraud-patterns` | Active fraud patterns |
-| `POST` | `/api/clear-logs` | Clear request log buffer |
-| `POST` | `/api/reset-metrics` | Reset all statistics |
-
----
-
-## Fraud Detection Engine
-
-Every request is scored 0–100 by four independent rules:
-
-| Rule | Trigger | Max Score |
-|---|---|---|
-| **Rapid Fire** | > 10 requests/IP in 60 s | 95 |
-| **Payload Anomaly** | Transaction amount > 2σ from rolling mean | 45 |
-| **Temporal Anomaly** | High-value transaction outside 9 AM–9 PM | 25 |
-| **Replay Attack** | Identical payload repeated ≥ 3× in 5 min | 40 |
-
-**Risk levels and actions:**
-
-| Score | Level | Action |
-|---|---|---|
-| 0–30 | NORMAL | Forward normally |
-| 31–69 | SUSPICIOUS | Forward + flag for monitoring |
-| 70+ | HIGH_RISK | Block (403) for payment routes |
-
----
-
-## Dashboard Features
-
-- **Service Health** — live status of all four services, polled every 10 s
-- **Traffic Summary** — gradient metric cards: total, successful, blocked, avg latency
-- **Detection Analytics** — fraud-rule bar chart + risk-distribution doughnut chart
-- **Risk Overview** — stacked progress bars + session statistics
-- **Live Request Stream** — filterable log feed with risk badge, target service, response time
-- **AI Analysis** — auto-generated alerts with actionable buttons (view blocked, analyze patterns, generate JSON report)
-- **Test Panel** — send any gateway request from the sidebar
-- **Demo Scenarios** — one-click attack simulations (rapid fire, statistical anomaly, off-hours, combined threat)
-- **Export** — download all metrics + logs as a JSON report
-
----
-
-## npm Scripts
-
-```bash
-# Root package
-npm run dev            # Start backend + frontend (recommended)
-npm start              # Start backend services only
-npm run dev:backend    # Start backend with nodemon hot-reload
-
-# Frontend (cd frontend first)
-npm start              # Vite dev server on port 3000
-npm run build          # Production build → frontend/build/
-npm run preview        # Preview production build
-```
-
----
-
-## License
-
-MIT
+- **Persistence**: JSON file repository in `./data/`. For production, replace `backend/shared/db.js` with a PostgreSQL or SQLite driver — the repository interface is identical.
+- **Rate Limiting**: In-memory sliding window. For horizontal scaling, swap the store in `rateLimiter.js` with Redis (ioredis).
+- **Fraud Engine**: Fully rule-based. All scoring is deterministic and auditable. No machine learning.

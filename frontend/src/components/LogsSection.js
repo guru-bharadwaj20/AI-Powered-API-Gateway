@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 
 const RISK = {
-  NORMAL:    { icon: '🟢', color: '#10b981', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  SUSPICIOUS:{ icon: '🟡', color: '#f59e0b', cls: 'bg-amber-50 text-amber-700 border-amber-200'     },
-  HIGH_RISK: { icon: '🔴', color: '#ef4444', cls: 'bg-red-50 text-red-700 border-red-200'            }
+  NORMAL:    { color: '#10b981', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  SUSPICIOUS:{ color: '#f59e0b', cls: 'bg-amber-50 text-amber-700 border-amber-200'     },
+  HIGH_RISK: { color: '#ef4444', cls: 'bg-red-50 text-red-700 border-red-200'            }
 };
 
 const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
@@ -11,7 +11,7 @@ const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
 
   const filteredLogs = filter === 'all'
     ? logs
-    : logs.filter(log => log.aiDecision?.riskLevel === filter);
+    : logs.filter(log => (log.riskDecision?.riskLevel || log.aiDecision?.riskLevel) === filter);
 
   return (
     <section>
@@ -60,7 +60,9 @@ const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
         ) : (
           <div className="space-y-1.5">
             {filteredLogs.slice(0, 30).map((log, i) => {
-              const risk = RISK[log.aiDecision?.riskLevel] || RISK.NORMAL;
+              // support both new riskDecision and legacy aiDecision field names
+              const rd = log.riskDecision || log.aiDecision || {};
+              const risk = RISK[rd.riskLevel] || RISK.NORMAL;
               const isBlocked = log.routing?.routingDecision === 'BLOCKED';
               const statusCode = log.response?.statusCode;
               const time = new Date(log.timestamp).toLocaleTimeString('en-US', {
@@ -73,11 +75,10 @@ const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
                   onClick={() => onShowDetail(log)}
                   className="flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors duration-150 border border-transparent hover:border-gray-200"
                 >
-                  {/* Risk indicator */}
                   <div
                     className="w-1 self-stretch rounded-full flex-shrink-0"
                     style={{ backgroundColor: risk.color, minHeight: '32px' }}
-                  ></div>
+                  />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
@@ -103,7 +104,8 @@ const LogsSection = ({ logs, isPaused, onTogglePause, onShowDetail }) => {
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${risk.cls}`}>
-                        {risk.icon} {log.aiDecision?.riskLevel?.replace('_', ' ')} · {log.aiDecision?.riskScore}
+                        {rd.riskLevel?.replace('_', ' ')} &middot; {rd.riskScore}
+                        {rd.confidence != null && ` (${Math.round(rd.confidence * 100)}% conf)`}
                       </span>
                       {log.routing?.targetService && (
                         <span className="text-xs text-gray-400">→ {log.routing.targetService}</span>

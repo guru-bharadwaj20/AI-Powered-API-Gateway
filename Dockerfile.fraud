@@ -1,0 +1,15 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+
+COPY backend/ ./backend/
+
+EXPOSE 4001
+
+ENV NODE_ENV=production
+ENV LOG_PRETTY=false
+
+CMD ["node", "backend/fraud-service/server.js"]
