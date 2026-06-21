@@ -1,188 +1,201 @@
-# SafeRoute AI - Intelligent API Gateway with Fraud Detection
+# SafeRoute AI — Intelligent API Gateway with Fraud Detection
 
-## 🎯 Overview
+A full-stack Node.js + React application that demonstrates an **AI-powered API Gateway** for fintech platforms. Every incoming API request is analyzed by a rule-based fraud-detection engine before being routed to the appropriate microservice. A live React dashboard monitors all traffic in real-time.
 
-**SafeRoute AI** is an intelligent API Gateway providing real-time fraud detection and intelligent routing for fintech platforms using AI-powered analysis.
+---
 
-## ✨ Features
-
-- Single API Gateway routing to 3+ backend microservices
-- AI-Powered Fraud Detection with explainable rule-based scoring
-- Real-time Monitoring Dashboard with interactive visualizations
-- Intelligent Routing based on risk assessment
-- Complete Request Traceability via correlation IDs (UUID v4)
-- Responsive React UI with Tailwind CSS and mobile support
-- Live Request Stream with color-coded status indicators
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────┐
-│   Client    │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────┐
-│   API Gateway (Port 4000)       │
-│   - Request Routing             │
-│   - AI Fraud Detection          │
-│   - Correlation ID Management   │
-│   - Metrics Collection          │
-└─────────┬───────────────────────┘
-          │
-    ┌─────┴─────┬─────────────┐
-    ▼           ▼             ▼
-┌─────────┐ ┌─────────┐ ┌──────────────┐
-│ Payment │ │ Account │ │Verification  │
-│ Service │ │ Service │ │Service       │
-│ (3001)  │ │ (3002)  │ │(3003)        │
-└─────────┘ └─────────┘ └──────────────┘
-
- React Dashboard (Dev): http://localhost:3000
+┌──────────────────────────────────────────────────────────┐
+│                  React Dashboard (port 3000)             │
+│  Metrics · Risk Charts · Live Stream · AI Insights       │
+└────────────────────────┬─────────────────────────────────┘
+                         │ fetches /metrics /logs /health
+                         ▼
+┌──────────────────────────────────────────────────────────┐
+│              API Gateway  (port 4000)                    │
+│  ┌──────────────────┐   ┌───────────────────────────┐   │
+│  │  Fraud Detection │ → │  Intelligent Router       │   │
+│  │  (rule engine)   │   │  BLOCK / ALLOW / MONITOR  │   │
+│  └──────────────────┘   └────────────┬──────────────┘   │
+└───────────────────────────────────────┼──────────────────┘
+                          ┌─────────────┼─────────────┐
+                          ▼             ▼             ▼
+                   ┌──────────┐ ┌──────────┐ ┌──────────────┐
+                   │ Payment  │ │ Account  │ │Verification  │
+                   │ Svc 3001 │ │ Svc 3002 │ │Svc 3003      │
+                   └──────────┘ └──────────┘ └──────────────┘
 ```
 
-## 🚀 Quick Start
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite 6, Tailwind CSS 3, Chart.js 4 |
+| Backend | Node.js, Express 4 |
+| AI Engine | Custom rule-based scoring (no external API needed) |
+| Dev tooling | Concurrently, Nodemon |
+
+---
+
+## Quick Start
 
 ### Prerequisites
-- Node.js 16+
-- npm or yarn
+- **Node.js 18+** and **npm**
 
-### Installation
+### 1 — Install dependencies
 
-**1. Install backend dependencies:**
 ```bash
+# Root (backend)
 npm install
-```
 
-**2. Install frontend dependencies:**
-```bash
+# Frontend
 cd frontend
 npm install
 cd ..
 ```
 
-**3. Start everything:**
+### 2 — Start everything
+
 ```bash
 npm run dev
 ```
 
-This starts all backend services and the React frontend automatically.
+This single command starts all four backend services and the Vite dev server. The browser opens automatically at **http://localhost:3000**.
 
-### Alternative: Start Services Separately
+### Alternative: start backend and frontend separately
 
 ```bash
-# Terminal 1 - Backend services (gateway + microservices)
+# Terminal 1 — all backend services
 npm start
 
-# Terminal 2 - React frontend
-npm run start:frontend
+# Terminal 2 — React dev server
+cd frontend && npm start
 ```
 
-## 📁 Project Structure
+---
+
+## Project Structure
 
 ```
 AI-Powered-API-Gateway/
 ├── backend/
 │   ├── gateway/
-│   │   └── server.js          # API Gateway (Port 4000)
+│   │   └── server.js           # API Gateway — port 4000
 │   ├── services/
-│   │   ├── payment-service.js     # Payment Service (Port 3001)
-│   │   ├── account-service.js     # Account Service (Port 3002)
-│   │   └── verification-service.js # Verification Service (Port 3003)
+│   │   ├── payment-service.js  # Payment microservice — port 3001
+│   │   ├── account-service.js  # Account microservice — port 3002
+│   │   └── verification-service.js  # Verification microservice — port 3003
 │   └── ai/
-│       └── fraud-detection.js     # AI Fraud Detection Engine
+│       └── fraud-detection.js  # Fraud detection engine
 │
 ├── frontend/
-│   ├── src/
-│   │   ├── components/            # React Components
-│   │   ├── hooks/                 # Custom React Hooks
-│   │   └── App.js                 # Main App Component
-│   ├── public/
-│   └── package.json
+│   ├── index.html              # Vite entry point
+│   ├── vite.config.js          # Vite + proxy config
+│   ├── tailwind.config.js
+│   └── src/
+│       ├── components/         # React UI components
+│       ├── hooks/              # useMetrics, useLogs, useNotification
+│       ├── App.js
+│       └── index.js
 │
-├── package.json
-├── start.js
-└── README.md
+├── scripts/
+│   └── dev.js                  # Orchestrates backend + frontend together
+├── start.js                    # Starts backend services only
+└── package.json
 ```
-
-## 📡 API Endpoints
-
-### Gateway Routes (Port 4000)
-
-#### Payment Operations
-- `POST /api/payments` - Create payment transaction with fraud detection
-- `GET /api/payments/:id` - Get payment transaction details
-
-#### Account Operations
-- `POST /api/accounts` - Create new account
-- `GET /api/accounts/:id` - Get account information
-- `PUT /api/accounts/:id` - Update account details
-
-#### Verification Operations
-- `POST /api/verify/identity` - Verify user identity
-- `POST /api/verify/phone` - Verify phone number
-- `POST /api/verify/email` - Verify email address
-
-#### System Endpoints
-- `GET /metrics` - Get real-time metrics and statistics
-- `GET /logs` - Get request logs with correlation IDs
-- `GET /health` - Health check endpoint
-
-## 🔍 Fraud Detection Rules
-
-The AI engine analyzes requests using multiple detection rules:
-
-- **Rapid Fire Detection** - Identifies suspiciously frequent requests
-- **Payload Anomaly Detection** - Detects unusual request patterns
-- **Time-Based Analysis** - Flags off-hours transactions
-- **Sequential Pattern Recognition** - Identifies systematic testing
-- **Geo-Velocity Analysis** - Detects impossible location changes
-
-## 🎨 Frontend Features
-
-- **Interactive Dashboard** with real-time metrics
-- **Live Request Monitoring** with filtering
-- **Test Panel** for API testing
-- **Demo Scenarios** for fraud detection demos
-- **Responsive Design** with mobile support
-- **Hamburger Menu** for mobile navigation
-- **Risk Visualization** with charts and graphs
-
-## 🛠️ Development
-
-### Available Scripts
-
-```bash
-npm start              # Start backend services (gateway + microservices)
-npm run start:all      # Start backend services (same goal as npm start)
-npm run start:frontend # Start React frontend only
-npm run dev            # Start everything (backend + frontend)
-npm run dev:backend    # Start backend services with nodemon (hot reload)
-```
-
-## 📊 Monitoring
-
-Access the dashboard at `http://localhost:3000` after starting the services to view:
-- Real-time traffic metrics
-- Risk distribution
-- Live request stream
-- AI analysis insights
-- Fraud detection patterns
-
-Gateway endpoints are available at `http://localhost:4000` (e.g. `/metrics`, `/logs`).
-
-## 🔐 Security Features
-
-- Real-time fraud scoring
-- Request correlation tracking
-- Anomaly detection
-- Risk-based routing
-- Complete audit trail
-
-## 📝 License
-
-MIT License
 
 ---
 
-**SafeRoute AI** - Intelligent API Gateway for Secure Transactions
+## API Reference
+
+All routes are served by the gateway on **port 4000**. Each request is analyzed by the fraud engine before forwarding.
+
+### Payment Operations
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/payments` | Create a payment (fraud-checked) |
+| `GET`  | `/api/payments/:transactionId` | Retrieve a transaction |
+
+### Account Operations
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/accounts` | Create an account |
+| `GET`  | `/api/accounts/:accountId` | Get account details |
+| `PUT`  | `/api/accounts/:accountId` | Update account |
+
+### Verification Operations
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/verify/identity` | Verify user identity |
+| `POST` | `/api/verify/transaction` | Verify a transaction |
+
+### System Endpoints
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Gateway health check |
+| `GET` | `/metrics` | Real-time metrics JSON |
+| `GET` | `/logs?limit=N&riskLevel=X` | Filtered request logs |
+| `GET` | `/api/fraud-patterns` | Active fraud patterns |
+| `POST` | `/api/clear-logs` | Clear request log buffer |
+| `POST` | `/api/reset-metrics` | Reset all statistics |
+
+---
+
+## Fraud Detection Engine
+
+Every request is scored 0–100 by four independent rules:
+
+| Rule | Trigger | Max Score |
+|---|---|---|
+| **Rapid Fire** | > 10 requests/IP in 60 s | 95 |
+| **Payload Anomaly** | Transaction amount > 2σ from rolling mean | 45 |
+| **Temporal Anomaly** | High-value transaction outside 9 AM–9 PM | 25 |
+| **Replay Attack** | Identical payload repeated ≥ 3× in 5 min | 40 |
+
+**Risk levels and actions:**
+
+| Score | Level | Action |
+|---|---|---|
+| 0–30 | NORMAL | Forward normally |
+| 31–69 | SUSPICIOUS | Forward + flag for monitoring |
+| 70+ | HIGH_RISK | Block (403) for payment routes |
+
+---
+
+## Dashboard Features
+
+- **Service Health** — live status of all four services, polled every 10 s
+- **Traffic Summary** — gradient metric cards: total, successful, blocked, avg latency
+- **Detection Analytics** — fraud-rule bar chart + risk-distribution doughnut chart
+- **Risk Overview** — stacked progress bars + session statistics
+- **Live Request Stream** — filterable log feed with risk badge, target service, response time
+- **AI Analysis** — auto-generated alerts with actionable buttons (view blocked, analyze patterns, generate JSON report)
+- **Test Panel** — send any gateway request from the sidebar
+- **Demo Scenarios** — one-click attack simulations (rapid fire, statistical anomaly, off-hours, combined threat)
+- **Export** — download all metrics + logs as a JSON report
+
+---
+
+## npm Scripts
+
+```bash
+# Root package
+npm run dev            # Start backend + frontend (recommended)
+npm start              # Start backend services only
+npm run dev:backend    # Start backend with nodemon hot-reload
+
+# Frontend (cd frontend first)
+npm start              # Vite dev server on port 3000
+npm run build          # Production build → frontend/build/
+npm run preview        # Preview production build
+```
+
+---
+
+## License
+
+MIT

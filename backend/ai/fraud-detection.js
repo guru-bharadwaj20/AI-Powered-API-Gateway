@@ -38,10 +38,13 @@ class FraudDetectionEngine {
       totalScore += timeResult.score;
     }
 
-    const sequentialResult = this.detectSequentialPattern(features);
-    if (sequentialResult.triggered) {
-      triggeredRules.push(sequentialResult);
-      totalScore += sequentialResult.score;
+    // Only check replay attacks for POST/PUT requests with a real body
+    if (features.hasBody) {
+      const sequentialResult = this.detectSequentialPattern(features);
+      if (sequentialResult.triggered) {
+        triggeredRules.push(sequentialResult);
+        totalScore += sequentialResult.score;
+      }
     }
 
     const finalScore = Math.min(100, totalScore);
@@ -54,9 +57,9 @@ class FraudDetectionEngine {
       correlationId: features.correlationId,
       timestamp: features.timestamp,
       riskScore: finalScore,
-      riskLevel: riskLevel,
-      triggeredRules: triggeredRules,
-      recommendation: recommendation,
+      riskLevel,
+      triggeredRules,
+      recommendation,
       explanation: this.generateExplanation(triggeredRules, finalScore),
       metadata: {
         ipAddress: features.ipAddress,
@@ -69,7 +72,9 @@ class FraudDetectionEngine {
   extractFeatures(requestData) {
     const now = Date.now();
     const hour = new Date(now).getHours();
-    
+    const body = requestData.body || {};
+    const hasBody = Object.keys(body).length > 0;
+
     return {
       correlationId: requestData.correlationId,
       timestamp: new Date(now).toISOString(),
@@ -77,11 +82,12 @@ class FraudDetectionEngine {
       userAgent: requestData.userAgent || 'Unknown',
       endpoint: requestData.endpoint,
       method: requestData.method,
-      body: requestData.body || {},
+      body,
+      hasBody,
       hourOfDay: hour,
       isBusinessHours: hour >= 9 && hour <= 21,
-      amount: requestData.body?.amount || 0,
-      userId: requestData.body?.userId || 'anonymous'
+      amount: body.amount || 0,
+      userId: body.userId || 'anonymous'
     };
   }
 
@@ -105,14 +111,13 @@ class FraudDetectionEngine {
     if (requestCount > 20) {
       const severity = requestCount > 30 ? 'CRITICAL' : 'HIGH';
       const score = Math.min(95, this.ruleWeights.RAPID_FIRE + (requestCount - 20) * 2);
-      
       return {
         triggered: true,
         ruleId: 'RAPID_FIRE',
         ruleName: 'Rapid Request Detection',
-        severity: severity,
+        severity,
         confidence: 0.95,
-        score: score,
+        score,
         reasoning: `Detected ${requestCount} requests in 60 seconds from IP ${ip}`
       };
     } else if (requestCount > 10) {
@@ -122,8 +127,8 @@ class FraudDetectionEngine {
         ruleName: 'Rapid Request Detection',
         severity: 'MEDIUM',
         confidence: 0.75,
-        score: this.ruleWeights.RAPID_FIRE * 0.6,
-        reasoning: `Detected ${requestCount} requests in 60 seconds from IP ${ip} (elevated activity)`
+        score: Math.round(this.ruleWeights.RAPID_FIRE * 0.6),
+        reasoning: `Elevated activity: ${requestCount} requests in 60 seconds from IP ${ip}`
       };
     }
 
@@ -147,6 +152,8 @@ class FraudDetectionEngine {
     const mean = this.transactionHistory.reduce((a, b) => a + b, 0) / this.transactionHistory.length;
     const variance = this.transactionHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / this.transactionHistory.length;
     const stdDev = Math.sqrt(variance);
+
+    if (stdDev === 0) return { triggered: false };
 
     const zScore = (features.amount - mean) / stdDev;
 
@@ -179,18 +186,16 @@ class FraudDetectionEngine {
     if (!features.isBusinessHours && features.amount > 1000) {
       const severity = features.amount > 5000 ? 'HIGH' : 'MEDIUM';
       const score = severity === 'HIGH' ? this.ruleWeights.TIME_BASED + 10 : this.ruleWeights.TIME_BASED;
-      
       return {
         triggered: true,
         ruleId: 'TIME_BASED',
         ruleName: 'Temporal Anomaly Detection',
-        severity: severity,
+        severity,
         confidence: 0.85,
-        score: score,
+        score,
         reasoning: `High-value transaction ($${features.amount}) at ${features.hourOfDay}:00 (off-hours)`
       };
     }
-
     return { triggered: false };
   }
 
@@ -200,7 +205,7 @@ class FraudDetectionEngine {
       .digest('hex');
 
     const now = Date.now();
-    const windowMs = 300000;
+    const windowMs = 300000; // 5 minutes
 
     if (!this.payloadHashes.has(payloadHash)) {
       this.payloadHashes.set(payloadHash, []);
@@ -245,7 +250,7 @@ class FraudDetectionEngine {
 
   generateRecommendation(score, features) {
     if (score >= 70) {
-      if (features.endpoint.includes('payment')) {
+      if (features.endpoint && features.endpoint.includes('payment')) {
         return 'BLOCK_AND_VERIFY';
       }
       return 'REQUIRE_ADDITIONAL_AUTH';
@@ -260,12 +265,15 @@ class FraudDetectionEngine {
       return 'No anomalies detected. Request appears legitimate.';
     }
 
-    const highSeverityRules = triggeredRules.filter(r => r.severity === 'HIGH' || r.severity === 'CRITICAL');
-    
-    if (highSeverityRules.length > 0) {
-      return `Multiple high-severity fraud indicators detected. Primary concern: ${highSeverityRules[0].reasoning}`;
-    }
+    const criticalRules = triggeredRules.filter(r => r.severity === 'CRITICAL');
+    const highRules = triggeredRules.filter(r => r.severity === 'HIGH');
 
+    if (criticalRules.length > 0) {
+      return `Critical fraud indicators detected. ${criticalRules[0].reasoning}`;
+    }
+    if (highRules.length > 0) {
+      return `High-severity fraud indicators detected. Primary concern: ${highRules[0].reasoning}`;
+    }
     return `Suspicious activity detected. ${triggeredRules[0].reasoning}`;
   }
 
@@ -274,13 +282,9 @@ class FraudDetectionEngine {
     if (!this.requestHistory.has(key)) {
       this.requestHistory.set(key, []);
     }
-    
+
     const history = this.requestHistory.get(key);
-    history.push({
-      timestamp: Date.now(),
-      endpoint: features.endpoint,
-      amount: features.amount
-    });
+    history.push({ timestamp: Date.now(), endpoint: features.endpoint, amount: features.amount });
 
     if (history.length > 50) {
       history.shift();
@@ -304,5 +308,3 @@ class FraudDetectionEngine {
 }
 
 module.exports = FraudDetectionEngine;
-
-// Made with Bob

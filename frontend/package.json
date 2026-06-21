@@ -1,20 +1,17 @@
 {
-  "name": "frontend-react",
-  "version": "0.1.0",
+  "name": "saferoute-ai-frontend",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-scripts": "5.0.1"
+    "chart.js": "^4.5.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": "react-app"
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"No tests configured\" && exit 0"
   },
   "browserslist": {
     "production": [
@@ -29,10 +26,10 @@
     ]
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.17",
-    "chart.js": "^4.5.1",
     "postcss": "^8.4.33",
-    "react-chartjs-2": "^5.3.1",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.3.5"
   }
 }

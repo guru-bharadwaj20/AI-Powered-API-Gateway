@@ -11,6 +11,7 @@ const PORT = 4000;
 
 app.use(cors());
 app.use(bodyParser.json());
+
 const frontendBuildPath = path.join(__dirname, '../../frontend/build');
 app.use(express.static(frontendBuildPath));
 
@@ -59,7 +60,7 @@ function logRequest(logEntry) {
 
 function updateMetrics(aiDecision, statusCode, responseTime) {
   metrics.totalRequests++;
-  
+
   if (statusCode >= 200 && statusCode < 300) {
     metrics.successRequests++;
   } else {
@@ -71,7 +72,7 @@ function updateMetrics(aiDecision, statusCode, responseTime) {
   }
 
   metrics.requestsByRiskLevel[aiDecision.riskLevel]++;
-  
+
   aiDecision.triggeredRules.forEach(rule => {
     if (metrics.triggeredRules[rule.ruleId] !== undefined) {
       metrics.triggeredRules[rule.ruleId]++;
@@ -88,7 +89,9 @@ function updateMetrics(aiDecision, statusCode, responseTime) {
 function forwardRequest(targetUrl, method, headers, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(targetUrl);
-    
+
+    const bodyString = method !== 'GET' && body ? JSON.stringify(body) : null;
+
     const options = {
       hostname: url.hostname,
       port: url.port,
@@ -96,29 +99,24 @@ function forwardRequest(targetUrl, method, headers, body) {
       method: method,
       headers: {
         'Content-Type': 'application/json',
+        ...(bodyString ? { 'Content-Length': Buffer.byteLength(bodyString) } : {}),
         ...headers
       }
     };
 
     const req = http.request(options, (res) => {
       let data = '';
-      
+
       res.on('data', (chunk) => {
         data += chunk;
       });
-      
+
       res.on('end', () => {
         try {
           const jsonData = JSON.parse(data);
-          resolve({
-            status: res.statusCode,
-            data: jsonData
-          });
+          resolve({ status: res.statusCode, data: jsonData });
         } catch (e) {
-          resolve({
-            status: res.statusCode,
-            data: { message: data }
-          });
+          resolve({ status: res.statusCode, data: { message: data } });
         }
       });
     });
@@ -127,36 +125,39 @@ function forwardRequest(targetUrl, method, headers, body) {
       reject(error);
     });
 
-    if (method !== 'GET' && body) {
-      req.write(JSON.stringify(body));
+    if (bodyString) {
+      req.write(bodyString);
     }
 
     req.end();
   });
 }
 
+// Correlation ID middleware
 app.use((req, res, next) => {
   const correlationId = uuidv4();
   req.correlationId = correlationId;
   req.startTime = Date.now();
-  
   res.setHeader('X-Correlation-ID', correlationId);
-  
   next();
 });
 
+function getClientIp(req) {
+  return req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+}
+
+// ─── Payment Routes ──────────────────────────────────────────────────────────
+
 app.post('/api/payments', async (req, res) => {
   const endpoint = '/api/payments';
-  
-  if (!metrics.requestsByEndpoint[endpoint]) {
-    metrics.requestsByEndpoint[endpoint] = 0;
-  }
+
+  if (!metrics.requestsByEndpoint[endpoint]) metrics.requestsByEndpoint[endpoint] = 0;
   metrics.requestsByEndpoint[endpoint]++;
   metrics.requestsByMethod.POST++;
 
   const requestData = {
     correlationId: req.correlationId,
-    ipAddress: req.ip || req.connection.remoteAddress,
+    ipAddress: getClientIp(req),
     userAgent: req.headers['user-agent'],
     endpoint,
     method: 'POST',
@@ -164,7 +165,7 @@ app.post('/api/payments', async (req, res) => {
   };
 
   const aiDecision = fraudEngine.analyzeRequest(requestData);
-  
+
   res.setHeader('X-Risk-Score', aiDecision.riskScore);
   res.setHeader('X-Risk-Level', aiDecision.riskLevel);
 
@@ -172,28 +173,14 @@ app.post('/api/payments', async (req, res) => {
 
   if (aiDecision.recommendation === 'BLOCK_AND_VERIFY') {
     updateMetrics(aiDecision, 403, responseTime);
-    
     logRequest({
       correlationId: req.correlationId,
       timestamp: new Date().toISOString(),
-      request: {
-        method: 'POST',
-        endpoint,
-        body: req.body,
-        ipAddress: requestData.ipAddress
-      },
+      request: { method: 'POST', endpoint, body: req.body, ipAddress: requestData.ipAddress },
       aiDecision,
-      routing: {
-        targetService: 'payment-service',
-        routingDecision: 'BLOCKED',
-        reason: 'Risk score exceeds threshold'
-      },
-      response: {
-        statusCode: 403,
-        responseTime
-      }
+      routing: { targetService: 'payment-service', routingDecision: 'BLOCKED', reason: 'Risk score exceeds threshold' },
+      response: { statusCode: 403, responseTime }
     });
-
     return res.status(403).json({
       error: 'Transaction blocked due to high fraud risk',
       riskScore: aiDecision.riskScore,
@@ -204,8 +191,7 @@ app.post('/api/payments', async (req, res) => {
   }
 
   try {
-    const targetUrl = `http://localhost:3001${endpoint}`;
-    const result = await forwardRequest(targetUrl, 'POST', {
+    const result = await forwardRequest(`http://localhost:3001${endpoint}`, 'POST', {
       'X-Correlation-ID': req.correlationId,
       'X-Risk-Score': aiDecision.riskScore,
       'X-Risk-Level': aiDecision.riskLevel
@@ -213,58 +199,38 @@ app.post('/api/payments', async (req, res) => {
 
     const finalResponseTime = Date.now() - req.startTime;
     updateMetrics(aiDecision, result.status, finalResponseTime);
-
     logRequest({
       correlationId: req.correlationId,
       timestamp: new Date().toISOString(),
-      request: {
-        method: 'POST',
-        endpoint,
-        body: req.body,
-        ipAddress: requestData.ipAddress
-      },
+      request: { method: 'POST', endpoint, body: req.body, ipAddress: requestData.ipAddress },
       aiDecision,
       routing: {
         targetService: 'payment-service',
         routingDecision: 'ALLOWED',
         reason: aiDecision.riskLevel === 'SUSPICIOUS' ? 'Allowed with monitoring' : 'Normal traffic'
       },
-      response: {
-        statusCode: result.status,
-        responseTime: finalResponseTime,
-        body: result.data
-      }
+      response: { statusCode: result.status, responseTime: finalResponseTime, body: result.data }
     });
 
-    res.status(result.status).json({
-      ...result.data,
-      riskScore: aiDecision.riskScore,
-      riskLevel: aiDecision.riskLevel
-    });
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore, riskLevel: aiDecision.riskLevel });
   } catch (error) {
     const errorResponseTime = Date.now() - req.startTime;
     updateMetrics(aiDecision, 503, errorResponseTime);
-    
-    res.status(503).json({
-      error: 'Payment service unavailable',
-      correlationId: req.correlationId
-    });
+    res.status(503).json({ error: 'Payment service unavailable', correlationId: req.correlationId });
   }
 });
 
 app.get('/api/payments/:transactionId', async (req, res) => {
   const endpoint = `/api/payments/${req.params.transactionId}`;
   const baseEndpoint = '/api/payments/:transactionId';
-  
-  if (!metrics.requestsByEndpoint[baseEndpoint]) {
-    metrics.requestsByEndpoint[baseEndpoint] = 0;
-  }
+
+  if (!metrics.requestsByEndpoint[baseEndpoint]) metrics.requestsByEndpoint[baseEndpoint] = 0;
   metrics.requestsByEndpoint[baseEndpoint]++;
   metrics.requestsByMethod.GET++;
 
   const requestData = {
     correlationId: req.correlationId,
-    ipAddress: req.ip || req.connection.remoteAddress,
+    ipAddress: getClientIp(req),
     userAgent: req.headers['user-agent'],
     endpoint: baseEndpoint,
     method: 'GET',
@@ -272,128 +238,43 @@ app.get('/api/payments/:transactionId', async (req, res) => {
   };
 
   const aiDecision = fraudEngine.analyzeRequest(requestData);
-  
   res.setHeader('X-Risk-Score', aiDecision.riskScore);
   res.setHeader('X-Risk-Level', aiDecision.riskLevel);
 
   try {
-    const targetUrl = `http://localhost:3001${endpoint}`;
-    const result = await forwardRequest(targetUrl, 'GET', {
+    const result = await forwardRequest(`http://localhost:3001${endpoint}`, 'GET', {
       'X-Correlation-ID': req.correlationId
     });
 
     const responseTime = Date.now() - req.startTime;
     updateMetrics(aiDecision, result.status, responseTime);
-
     logRequest({
       correlationId: req.correlationId,
       timestamp: new Date().toISOString(),
-      request: {
-        method: 'GET',
-        endpoint: baseEndpoint,
-        params: req.params,
-        ipAddress: requestData.ipAddress
-      },
+      request: { method: 'GET', endpoint: baseEndpoint, params: req.params, ipAddress: requestData.ipAddress },
       aiDecision,
-      routing: {
-        targetService: 'payment-service',
-        routingDecision: 'ALLOWED'
-      },
-      response: {
-        statusCode: result.status,
-        responseTime
-      }
+      routing: { targetService: 'payment-service', routingDecision: 'ALLOWED' },
+      response: { statusCode: result.status, responseTime }
     });
 
-    res.status(result.status).json({
-      ...result.data,
-      riskScore: aiDecision.riskScore
-    });
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
   } catch (error) {
-    res.status(503).json({
-      error: 'Payment service unavailable',
-      correlationId: req.correlationId
-    });
+    res.status(503).json({ error: 'Payment service unavailable', correlationId: req.correlationId });
   }
 });
 
-app.get('/api/accounts/:accountId', async (req, res) => {
-  const endpoint = `/api/accounts/${req.params.accountId}`;
-  const baseEndpoint = '/api/accounts/:accountId';
-  
-  if (!metrics.requestsByEndpoint[baseEndpoint]) {
-    metrics.requestsByEndpoint[baseEndpoint] = 0;
-  }
-  metrics.requestsByEndpoint[baseEndpoint]++;
-  metrics.requestsByMethod.GET++;
+// ─── Account Routes ───────────────────────────────────────────────────────────
 
-  const requestData = {
-    correlationId: req.correlationId,
-    ipAddress: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent'],
-    endpoint: baseEndpoint,
-    method: 'GET',
-    body: {}
-  };
+app.post('/api/accounts', async (req, res) => {
+  const endpoint = '/api/accounts';
 
-  const aiDecision = fraudEngine.analyzeRequest(requestData);
-  
-  res.setHeader('X-Risk-Score', aiDecision.riskScore);
-  res.setHeader('X-Risk-Level', aiDecision.riskLevel);
-
-  try {
-    const targetUrl = `http://localhost:3002${endpoint}`;
-    const result = await forwardRequest(targetUrl, 'GET', {
-      'X-Correlation-ID': req.correlationId
-    });
-
-    const responseTime = Date.now() - req.startTime;
-    updateMetrics(aiDecision, result.status, responseTime);
-
-    logRequest({
-      correlationId: req.correlationId,
-      timestamp: new Date().toISOString(),
-      request: {
-        method: 'GET',
-        endpoint: baseEndpoint,
-        params: req.params,
-        ipAddress: requestData.ipAddress
-      },
-      aiDecision,
-      routing: {
-        targetService: 'account-service',
-        routingDecision: 'ALLOWED'
-      },
-      response: {
-        statusCode: result.status,
-        responseTime
-      }
-    });
-
-    res.status(result.status).json({
-      ...result.data,
-      riskScore: aiDecision.riskScore
-    });
-  } catch (error) {
-    res.status(503).json({
-      error: 'Account service unavailable',
-      correlationId: req.correlationId
-    });
-  }
-});
-
-app.post('/api/verify/identity', async (req, res) => {
-  const endpoint = '/api/verify/identity';
-  
-  if (!metrics.requestsByEndpoint[endpoint]) {
-    metrics.requestsByEndpoint[endpoint] = 0;
-  }
+  if (!metrics.requestsByEndpoint[endpoint]) metrics.requestsByEndpoint[endpoint] = 0;
   metrics.requestsByEndpoint[endpoint]++;
   metrics.requestsByMethod.POST++;
 
   const requestData = {
     correlationId: req.correlationId,
-    ipAddress: req.ip || req.connection.remoteAddress,
+    ipAddress: getClientIp(req),
     userAgent: req.headers['user-agent'],
     endpoint,
     method: 'POST',
@@ -401,54 +282,198 @@ app.post('/api/verify/identity', async (req, res) => {
   };
 
   const aiDecision = fraudEngine.analyzeRequest(requestData);
-  
   res.setHeader('X-Risk-Score', aiDecision.riskScore);
   res.setHeader('X-Risk-Level', aiDecision.riskLevel);
 
   try {
-    const targetUrl = `http://localhost:3003${endpoint}`;
-    const result = await forwardRequest(targetUrl, 'POST', {
+    const result = await forwardRequest(`http://localhost:3002${endpoint}`, 'POST', {
+      'X-Correlation-ID': req.correlationId,
+      'X-Risk-Score': aiDecision.riskScore
+    }, req.body);
+
+    const responseTime = Date.now() - req.startTime;
+    updateMetrics(aiDecision, result.status, responseTime);
+    logRequest({
+      correlationId: req.correlationId,
+      timestamp: new Date().toISOString(),
+      request: { method: 'POST', endpoint, body: req.body, ipAddress: requestData.ipAddress },
+      aiDecision,
+      routing: { targetService: 'account-service', routingDecision: 'ALLOWED' },
+      response: { statusCode: result.status, responseTime }
+    });
+
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
+  } catch (error) {
+    res.status(503).json({ error: 'Account service unavailable', correlationId: req.correlationId });
+  }
+});
+
+app.get('/api/accounts/:accountId', async (req, res) => {
+  const endpoint = `/api/accounts/${req.params.accountId}`;
+  const baseEndpoint = '/api/accounts/:accountId';
+
+  if (!metrics.requestsByEndpoint[baseEndpoint]) metrics.requestsByEndpoint[baseEndpoint] = 0;
+  metrics.requestsByEndpoint[baseEndpoint]++;
+  metrics.requestsByMethod.GET++;
+
+  const requestData = {
+    correlationId: req.correlationId,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'],
+    endpoint: baseEndpoint,
+    method: 'GET',
+    body: {}
+  };
+
+  const aiDecision = fraudEngine.analyzeRequest(requestData);
+  res.setHeader('X-Risk-Score', aiDecision.riskScore);
+  res.setHeader('X-Risk-Level', aiDecision.riskLevel);
+
+  try {
+    const result = await forwardRequest(`http://localhost:3002${endpoint}`, 'GET', {
+      'X-Correlation-ID': req.correlationId
+    });
+
+    const responseTime = Date.now() - req.startTime;
+    updateMetrics(aiDecision, result.status, responseTime);
+    logRequest({
+      correlationId: req.correlationId,
+      timestamp: new Date().toISOString(),
+      request: { method: 'GET', endpoint: baseEndpoint, params: req.params, ipAddress: requestData.ipAddress },
+      aiDecision,
+      routing: { targetService: 'account-service', routingDecision: 'ALLOWED' },
+      response: { statusCode: result.status, responseTime }
+    });
+
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
+  } catch (error) {
+    res.status(503).json({ error: 'Account service unavailable', correlationId: req.correlationId });
+  }
+});
+
+app.put('/api/accounts/:accountId', async (req, res) => {
+  const endpoint = `/api/accounts/${req.params.accountId}`;
+  const baseEndpoint = '/api/accounts/:accountId';
+
+  if (!metrics.requestsByEndpoint[baseEndpoint]) metrics.requestsByEndpoint[baseEndpoint] = 0;
+  metrics.requestsByEndpoint[baseEndpoint]++;
+  metrics.requestsByMethod.PUT++;
+
+  const requestData = {
+    correlationId: req.correlationId,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'],
+    endpoint: baseEndpoint,
+    method: 'PUT',
+    body: req.body
+  };
+
+  const aiDecision = fraudEngine.analyzeRequest(requestData);
+  res.setHeader('X-Risk-Score', aiDecision.riskScore);
+  res.setHeader('X-Risk-Level', aiDecision.riskLevel);
+
+  try {
+    const result = await forwardRequest(`http://localhost:3002${endpoint}`, 'PUT', {
+      'X-Correlation-ID': req.correlationId,
+      'X-Risk-Score': aiDecision.riskScore
+    }, req.body);
+
+    const responseTime = Date.now() - req.startTime;
+    updateMetrics(aiDecision, result.status, responseTime);
+    logRequest({
+      correlationId: req.correlationId,
+      timestamp: new Date().toISOString(),
+      request: { method: 'PUT', endpoint: baseEndpoint, body: req.body, ipAddress: requestData.ipAddress },
+      aiDecision,
+      routing: { targetService: 'account-service', routingDecision: 'ALLOWED' },
+      response: { statusCode: result.status, responseTime }
+    });
+
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
+  } catch (error) {
+    res.status(503).json({ error: 'Account service unavailable', correlationId: req.correlationId });
+  }
+});
+
+// ─── Verification Routes ──────────────────────────────────────────────────────
+
+app.post('/api/verify/identity', async (req, res) => {
+  const endpoint = '/api/verify/identity';
+
+  if (!metrics.requestsByEndpoint[endpoint]) metrics.requestsByEndpoint[endpoint] = 0;
+  metrics.requestsByEndpoint[endpoint]++;
+  metrics.requestsByMethod.POST++;
+
+  const requestData = {
+    correlationId: req.correlationId,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'],
+    endpoint,
+    method: 'POST',
+    body: req.body
+  };
+
+  const aiDecision = fraudEngine.analyzeRequest(requestData);
+  res.setHeader('X-Risk-Score', aiDecision.riskScore);
+  res.setHeader('X-Risk-Level', aiDecision.riskLevel);
+
+  try {
+    const result = await forwardRequest(`http://localhost:3003${endpoint}`, 'POST', {
       'X-Correlation-ID': req.correlationId
     }, req.body);
 
     const responseTime = Date.now() - req.startTime;
     updateMetrics(aiDecision, result.status, responseTime);
-
     logRequest({
       correlationId: req.correlationId,
       timestamp: new Date().toISOString(),
-      request: {
-        method: 'POST',
-        endpoint,
-        body: req.body,
-        ipAddress: requestData.ipAddress
-      },
+      request: { method: 'POST', endpoint, body: req.body, ipAddress: requestData.ipAddress },
       aiDecision,
-      routing: {
-        targetService: 'verification-service',
-        routingDecision: 'ALLOWED'
-      },
-      response: {
-        statusCode: result.status,
-        responseTime
-      }
+      routing: { targetService: 'verification-service', routingDecision: 'ALLOWED' },
+      response: { statusCode: result.status, responseTime }
     });
 
-    res.status(result.status).json({
-      ...result.data,
-      riskScore: aiDecision.riskScore
-    });
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
   } catch (error) {
-    res.status(503).json({
-      error: 'Verification service unavailable',
-      correlationId: req.correlationId
-    });
+    res.status(503).json({ error: 'Verification service unavailable', correlationId: req.correlationId });
   }
 });
 
+app.post('/api/verify/transaction', async (req, res) => {
+  const endpoint = '/api/verify/transaction';
+
+  if (!metrics.requestsByEndpoint[endpoint]) metrics.requestsByEndpoint[endpoint] = 0;
+  metrics.requestsByEndpoint[endpoint]++;
+  metrics.requestsByMethod.POST++;
+
+  const requestData = {
+    correlationId: req.correlationId,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'],
+    endpoint,
+    method: 'POST',
+    body: req.body
+  };
+
+  const aiDecision = fraudEngine.analyzeRequest(requestData);
+
+  try {
+    const result = await forwardRequest(`http://localhost:3003${endpoint}`, 'POST', {
+      'X-Correlation-ID': req.correlationId
+    }, req.body);
+
+    const responseTime = Date.now() - req.startTime;
+    updateMetrics(aiDecision, result.status, responseTime);
+    res.status(result.status).json({ ...result.data, riskScore: aiDecision.riskScore });
+  } catch (error) {
+    res.status(503).json({ error: 'Verification service unavailable', correlationId: req.correlationId });
+  }
+});
+
+// ─── System Endpoints ─────────────────────────────────────────────────────────
+
 app.get('/metrics', (req, res) => {
   const uptime = Math.floor((Date.now() - metrics.startTime) / 1000);
-  
   res.json({
     timestamp: new Date().toISOString(),
     uptime,
@@ -464,39 +489,26 @@ app.get('/metrics', (req, res) => {
       averageScore: Math.round(metrics.averageRiskScore * 10) / 10,
       byLevel: metrics.requestsByRiskLevel
     },
-    ai: {
-      triggeredRules: metrics.triggeredRules
-    },
-    performance: {
-      averageResponseTime: metrics.averageResponseTime
-    }
+    ai: { triggeredRules: metrics.triggeredRules },
+    performance: { averageResponseTime: metrics.averageResponseTime }
   });
 });
 
 app.get('/logs', (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const riskLevel = req.query.riskLevel;
-  
+
   let filteredLogs = requestLogs;
-  
   if (riskLevel) {
-    filteredLogs = requestLogs.filter(log => 
-      log.aiDecision.riskLevel === riskLevel
-    );
+    filteredLogs = requestLogs.filter(log => log.aiDecision.riskLevel === riskLevel);
   }
-  
-  res.json({
-    logs: filteredLogs.slice(0, limit),
-    totalCount: filteredLogs.length
-  });
+
+  res.json({ logs: filteredLogs.slice(0, limit), totalCount: filteredLogs.length });
 });
 
 app.post('/api/clear-logs', (req, res) => {
   requestLogs.length = 0;
-  res.json({
-    success: true,
-    message: 'Logs cleared successfully'
-  });
+  res.json({ success: true, message: 'Logs cleared successfully' });
 });
 
 app.post('/api/reset-metrics', (req, res) => {
@@ -519,120 +531,50 @@ app.post('/api/reset-metrics', (req, res) => {
     GEO_VELOCITY: 0
   };
   metrics.startTime = Date.now();
-  
   fraudEngine.clearHistory();
-  
-  res.json({
-    success: true,
-    message: 'Metrics reset successfully'
-  });
+  res.json({ success: true, message: 'Metrics reset successfully' });
 });
 
 app.get('/api/fraud-patterns', (req, res) => {
   const patterns = [];
-  
-  // Analyze triggered rules to create fraud patterns
-  if (metrics.triggeredRules.RAPID_FIRE > 0) {
-    patterns.push({
-      id: 'rapid-fire',
+  const rules = [
+    {
+      key: 'RAPID_FIRE',
       type: 'Rapid Fire Attack',
-      severity: metrics.triggeredRules.RAPID_FIRE > 10 ? 'high' : metrics.triggeredRules.RAPID_FIRE > 5 ? 'medium' : 'low',
-      count: metrics.triggeredRules.RAPID_FIRE,
-      description: 'Multiple requests from same source in short time period',
-      lastDetected: new Date().toISOString()
-    });
-  }
-  
-  if (metrics.triggeredRules.PAYLOAD_ANOMALY > 0) {
-    patterns.push({
-      id: 'payload-anomaly',
+      description: 'Multiple requests from same source in short time period'
+    },
+    {
+      key: 'PAYLOAD_ANOMALY',
       type: 'Payload Anomaly',
-      severity: metrics.triggeredRules.PAYLOAD_ANOMALY > 10 ? 'high' : metrics.triggeredRules.PAYLOAD_ANOMALY > 5 ? 'medium' : 'low',
-      count: metrics.triggeredRules.PAYLOAD_ANOMALY,
-      description: 'Unusual transaction amounts or patterns detected',
-      lastDetected: new Date().toISOString()
-    });
-  }
-  
-  if (metrics.triggeredRules.TIME_BASED > 0) {
-    patterns.push({
-      id: 'time-based',
+      description: 'Unusual transaction amounts or statistical outliers detected'
+    },
+    {
+      key: 'TIME_BASED',
       type: 'Off-Hours Activity',
-      severity: metrics.triggeredRules.TIME_BASED > 10 ? 'high' : metrics.triggeredRules.TIME_BASED > 5 ? 'medium' : 'low',
-      count: metrics.triggeredRules.TIME_BASED,
-      description: 'Suspicious activity during unusual hours',
-      lastDetected: new Date().toISOString()
-    });
-  }
-  
-  if (metrics.triggeredRules.SEQUENTIAL_PATTERN > 0) {
-    patterns.push({
-      id: 'sequential',
-      type: 'Sequential Pattern',
-      severity: metrics.triggeredRules.SEQUENTIAL_PATTERN > 10 ? 'high' : metrics.triggeredRules.SEQUENTIAL_PATTERN > 5 ? 'medium' : 'low',
-      count: metrics.triggeredRules.SEQUENTIAL_PATTERN,
-      description: 'Coordinated attack pattern detected',
-      lastDetected: new Date().toISOString()
-    });
-  }
-  
-  res.json({
-    patterns,
-    totalPatterns: patterns.length,
-    timestamp: new Date().toISOString()
-  });
-});
+      description: 'Suspicious activity during unusual hours (outside 9AM-9PM)'
+    },
+    {
+      key: 'SEQUENTIAL_PATTERN',
+      type: 'Replay Attack',
+      description: 'Identical request payload submitted multiple times'
+    }
+  ];
 
-app.post('/api/test', async (req, res) => {
-  const testData = req.body;
-  
-  try {
-    // Validate JSON
-    if (!testData || typeof testData !== 'object') {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid JSON payload',
-        message: 'Request body must be a valid JSON object'
+  for (const rule of rules) {
+    const count = metrics.triggeredRules[rule.key];
+    if (count > 0) {
+      patterns.push({
+        id: rule.key.toLowerCase().replace('_', '-'),
+        type: rule.type,
+        severity: count > 10 ? 'high' : count > 5 ? 'medium' : 'low',
+        count,
+        description: rule.description,
+        lastDetected: new Date().toISOString()
       });
     }
-    
-    // Determine endpoint from test data
-    let endpoint = '/api/payments';
-    let method = 'POST';
-    
-    if (testData.endpoint) {
-      endpoint = testData.endpoint;
-      delete testData.endpoint;
-    }
-    
-    if (testData.method) {
-      method = testData.method;
-      delete testData.method;
-    }
-    
-    // Forward the test request through the gateway
-    const targetUrl = `http://localhost:3000${endpoint}`;
-    const result = await forwardRequest(targetUrl, method, {
-      'X-Correlation-ID': req.correlationId,
-      'X-Test-Request': 'true'
-    }, testData);
-    
-    res.json({
-      success: true,
-      testRequest: testData,
-      response: result.data,
-      statusCode: result.status,
-      correlationId: req.correlationId,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      message: 'Failed to process test request'
-    });
   }
+
+  res.json({ patterns, totalPatterns: patterns.length, timestamp: new Date().toISOString() });
 });
 
 app.get('/health', (req, res) => {
@@ -640,7 +582,18 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     service: 'api-gateway',
     port: PORT,
+    uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
     timestamp: new Date().toISOString()
+  });
+});
+
+// SPA fallback — must be last
+app.get('*', (req, res) => {
+  const indexPath = path.join(frontendBuildPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      res.status(404).json({ error: 'Not found' });
+    }
   });
 });
 
@@ -648,5 +601,3 @@ app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);
   console.log(`Dashboard available at http://localhost:${PORT}`);
 });
-
-// Made with Bob
