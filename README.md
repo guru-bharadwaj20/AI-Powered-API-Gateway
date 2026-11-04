@@ -1,5 +1,13 @@
 # API Gateway — Explainable Fraud Detection
 
+<p align="center">
+  <a href="AI-Powered-API-Gateway%20Demo.mp4">
+    <img src="docs/AI-Powered-API-Gateway%20Demo%20thumbnail.png" alt="Watch the AI-Powered-API-Gateway demo video" width="720">
+  </a>
+  <br>
+  <sub>▶ <b><a href="AI-Powered-API-Gateway%20Demo.mp4">Watch the AI-Powered-API-Gateway demo</a></b> (74 s): the hackathon plan, all 7 commits, the README quick start on a fresh clone, and 12 live steps that score, block and explain real requests</sub>
+</p>
+
 **An API gateway that scores every request with a deterministic, seven-rule fraud engine before it reaches a service — and explains every decision it makes.**
 
 [![Node](https://img.shields.io/badge/Node-22-339933?logo=node.js&logoColor=white)](package.json)
